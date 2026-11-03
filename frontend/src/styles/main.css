@@ -1,0 +1,177 @@
+/**
+ * @file main.css
+ * @description 医院医疗物资数字化展厅 (SPD Showcase) 全局基础重置、滚动条与排版工具类
+ * 严格遵循 Emil Kowalski 细腻动效与 Apple HIG 交互标准。
+ * 包含全局布局重置、防抖等宽数字排版 (tabular-nums)、高频操作防文本误选、
+ * 现代半透明滚动条、纯矢量 SVG 图标基准规范以及文本防破版截断保护。
+ * 严禁任何 Emoji 装饰字符。
+ *
+ * @param 无 (全局样式表)
+ * @returns 基础重置规则与全局排版原子类
+ * @route internal://src/styles/main.css
+ * @throws 无
+ */
+
+/* =========================================================================
+   1. 全局布局与字体平滑重置
+   ========================================================================= */
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body {
+  width: 100%;
+  min-height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  background-color: var(--bg-page, #080c14);
+  color: var(--text-primary, #f8fafc);
+  line-height: 1.5;
+  transition: background-color 250ms ease-out, color 250ms ease-out;
+}
+
+/* =========================================================================
+   2. 高频交互元素防双击误选文字
+   ========================================================================= */
+button,
+.el-button,
+.el-tabs__item,
+.el-menu-item,
+.spd-nav-link,
+.spd-role-btn,
+.filter-btn,
+.btn-theme,
+.mode-pill-btn {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* =========================================================================
+   3. 现代优雅半透明滚动条
+   ========================================================================= */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.65);
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.25);
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.55);
+}
+
+/* =========================================================================
+   4. 等宽数字排版与防抖时钟计数器 (Tabular Nums & Monospace)
+   ========================================================================= */
+.tabular-nums,
+.spd-tabular-nums {
+  font-variant-numeric: tabular-nums;
+  -webkit-font-feature-settings: "tnum";
+  font-feature-settings: "tnum";
+}
+
+.mono,
+.spd-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-feature-settings: "tnum";
+  font-feature-settings: "tnum";
+}
+
+/* =========================================================================
+   5. 纯矢量 SVG 图标通用规范 (严格 0-Emoji)
+   ========================================================================= */
+.svg-icon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.8;
+  stroke: currentColor;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vertical-align: middle;
+  flex-shrink: 0;
+  transition: stroke 0.2s ease, transform 0.2s ease;
+}
+
+/* =========================================================================
+   6. 基础卡片、徽标胶囊与防溢出截断
+   ========================================================================= */
+.spd-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.spd-card:hover {
+  border-color: rgba(56, 189, 248, 0.4);
+  background: var(--bg-card-hover);
+}
+
+.spd-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.spd-badge-pending {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.spd-badge-submitted {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.spd-badge-locked {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.spd-badge-info {
+  background: var(--color-info-bg);
+  color: var(--color-info);
+  border: 1px solid rgba(129, 140, 248, 0.25);
+}
+
+.spd-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>医院医疗物资全链路管理系统 - 业务流转全景与5大智能体节点流程图</title>
+  <style>
+    :root[data-theme="light"] {
+      --bg-page: #f8f8fc;
+      --bg-card: #ffffff;
+      --bg-node: #faf9ff;
+      --bg-node-header: #f1effb;
+      --bg-badge-mcp: #e0f2fe;
+      --text-badge-mcp: #0369a1;
+      --bg-badge-rag: #fef3c7;
+      --text-badge-rag: #b45309;
+      --bg-badge-route: #dcfce7;
+      --text-badge-route: #15803d;
+      --border-card: #e2e0f0;
+      --border-node: #cbc4e7;
+      --line-connector: #8d82b1;
+      --text-primary: #1e1b3a;
+      --text-secondary: #5a5475;
+      --text-muted: #7c7599;
+      --accent-primary: #4f46e5;
+      --accent-hover: #4338ca;
+      --shadow-card: 0 4px 16px rgba(48, 40, 91, 0.05);
+    }
+
+    :root[data-theme="dark"] {
+      --bg-page: #0b0f19;
+      --bg-card: #111827;
+      --bg-node: #1e293b;
+      --bg-node-header: #0f172a;
+      --bg-badge-mcp: rgba(14, 165, 233, 0.18);
+      --text-badge-mcp: #38bdf8;
+      --bg-badge-rag: rgba(245, 158, 11, 0.18);
+      --text-badge-rag: #fbbf24;
+      --bg-badge-route: rgba(16, 185, 129, 0.18);
+      --text-badge-route: #34d399;
+      --border-card: #1f2937;
+      --border-node: #334155;
+      --line-connector: #64748b;
+      --text-primary: #f8fafc;
+      --text-secondary: #cbd5e1;
+      --text-muted: #94a3b8;
+      --accent-primary: #6366f1;
+      --accent-hover: #818cf8;
+      --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+    }
+
+    body {
+      margin: 0;
+      padding: 24px 32px;
+      background-color: var(--bg-page);
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      transition: background-color 0.2s ease, color 0.2s ease;
+    }
+
+    .top-bar {
+      max-width: 1440px;
+      margin: 0 auto 24px auto;
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 14px;
+      padding: 18px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: var(--shadow-card);
+    }
+
+    .top-title {
+      font-size: 20px;
+      font-weight: 700;
+      margin: 0 0 6px 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .top-subtitle {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin: 0;
+    }
+
+    .toolbar-actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+      background-color: var(--bg-node);
+      border: 1px solid var(--border-node);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .btn:hover {
+      border-color: var(--accent-primary);
+      color: var(--accent-primary);
+    }
+
+    .canvas-container {
+      max-width: 1440px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .diagram-card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 14px;
+      padding: 24px 28px;
+      box-shadow: var(--shadow-card);
+    }
+
+    .card-header {
+      border-bottom: 1px solid var(--border-card);
+      padding-bottom: 14px;
+      margin-bottom: 22px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .card-title {
+      font-size: 17px;
+      font-weight: 700;
+      margin: 0 0 4px 0;
+    }
+
+    .card-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin: 0;
+    }
+
+    .role-tag {
+      display: inline-block;
+      padding: 4px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 6px;
+      background-color: var(--bg-node-header);
+      border: 1px solid var(--border-node);
+      color: var(--accent-primary);
+    }
+
+    .flow-row {
+      display: flex;
+      align-items: stretch;
+      justify-content: space-between;
+      gap: 12px;
+      position: relative;
+    }
+
+    .flow-node {
+      flex: 1;
+      background-color: var(--bg-node);
+      border: 1.5px solid var(--border-node);
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .node-head {
+      background-color: var(--bg-node-header);
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-node);
+      font-size: 13px;
+      font-weight: 700;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .node-step-id {
+      font-family: Consolas, Monaco, monospace;
+      font-size: 11px;
+      color: var(--accent-primary);
+      font-weight: 700;
+    }
+
+    .node-body {
+      padding: 12px 14px;
+      font-size: 12.5px;
+      line-height: 1.55;
+      color: var(--text-secondary);
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .node-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: Consolas, Monaco, monospace;
+    }
+
+    .badge-mcp {
+      background-color: var(--bg-badge-mcp);
+      color: var(--text-badge-mcp);
+    }
+
+    .badge-rag {
+      background-color: var(--bg-badge-rag);
+      color: var(--text-badge-rag);
+    }
+
+    .badge-route {
+      background-color: var(--bg-badge-route);
+      color: var(--text-badge-route);
+    }
+
+    .flow-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--line-connector);
+      min-width: 28px;
+    }
+
+    .icon-svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+  </style>
+</head>
+<body>
+  <header class="top-bar">
+    <div>
+      <h1 class="top-title">
+        <svg class="icon-svg" viewBox="0 0 24 24">
+          <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+          <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+          <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+          <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+          <path d="M10 6.5h4M6.5 10v4M17.5 10v4M10 17.5h4"></path>
+        </svg>
+        医院医疗物资全链路管理系统 - 业务流转全景与 5 大智能体节点流程图
+      </h1>
+      <p class="top-subtitle">
+        视频录制与架构答辩专用视图 | 清晰标注三级人员流转关系、每个 LangGraph 智能体节点作用、MCP 数据库工具与 Chroma RAG 知识库调用
+      </p>
+    </div>
+    <div class="toolbar-actions">
+      <button class="btn" id="btn-toggle-theme" onclick="toggleThemeMode()">
+        <svg class="icon-svg" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="5"></circle>
+          <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+        </svg>
+        <span id="theme-label">切换深色模式</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="canvas-container" id="flowcharts-root">
+    <!-- 画布 1：全院三级人员业务流转总图 -->
+    <section class="diagram-card" id="canvas-biz-overview">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">一、 全院三级人员权限与医疗物资正/逆向业务流转全景图</h2>
+          <p class="card-desc">涵盖信息科（系统最大权限）、耗材科/设备科/财务科（主库与职能科室管理）、临床各科室（二级库人员）的 6W 物权交接闭环</p>
+        </div>
+        <span class="role-tag">核心业务主线（移库不计费 / 消耗即结算）</span>
+      </div>
+      <div class="flow-row">
+        <div class="flow-node">
+          <div class="node-head">
+            <span>1. 信息科系统管理员</span>
+            <span class="node-step-id">ROLE: sys_admin</span>
+          </div>
+          <div class="node-body">
+            <div>
+              <strong>核心权责：</strong>全院最大权限。配置全院科室树（划分耗材科主库、设备科主库、财务科及各临床二级库），添加/审批账号，监管并执行<strong>全流程业务链路日志 CRUD</strong>。
+            </div>
+            <div class="node-badges">
+              <span class="badge badge-mcp">sys_department</span>
+              <span class="badge badge-mcp">spd_workflow_log</span>
+            </div>
+          </div>
+        </div>
+        <div class="flow-arrow">
+          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+        </div>
+        <div class="flow-node">
+          <div class="node-head">
+            <span>2. 产品字典与主库总仓</span>
+            <span class="node-step-id">耗材科 / 设备科</span>
+          </div>
+          <div class="node-body">
+            <div>
+              <strong>核心动作：</strong>在【产品字典】按“归口主科室（耗材科/设备科）+ 耗材分类（普通/高值）”建档；全部外购物资统一在【普通耗材管理（主库总仓）】按批次验收入库并打印入库单。
+            </div>
+            <div class="node-badges">
+              <span class="badge badge-mcp">spd_product_dict</span>
+              <span class="badge badge-mcp">spd_main_inventory</span>
+            </div>
+          </div>
+        </div>
+        <div class="flow-arrow">
+          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+        </div>
+        <div class="flow-node">
+          <div class="node-head">
+            <span>3. 主库按需分发双路分流</span>
+            <span class="node-step-id">FEFO 近效期先出</span>
+          </div>
+          <div class="node-body">
+            <div>
+              <strong>分流规则：</strong>主库开具《按需分发调拨单》（移库不计费）：<br/>
+              - 路径 A：普通耗材按“批次+数量”直接分发至【临床二级库】；<br/>
+              - 路径 B：高值耗材转入【高值耗材专仓】触发“由量到码”拆包赋唯一 UDI 序列号。
+            </div>
+            <div class="node-badges">
+              <span class="badge badge-mcp">spd_distribution_order</span>
+              <span class="badge badge-route">节点: 3_MAIN_DISPATCH</span>
+            </div>
+          </div>
+        </div>
+        <div class="flow-arrow">
+          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+        </div>
+        <div class="flow-node">
+          <div class="node-head">
+            <span>4. 临床二级库与高值核销</span>
+            <span class="node-step-id">ROLE: secondary_user</span>
+          </div>
+          <div class="node-body">
+            <div>
+              <strong>核心动作：</strong>临床二级库人员向主库发起申领（按归口自动路由耗材科/设备科）、扫码签收分发物资（或差异拒收/逆向退库）；登记日常消耗或绑定患者住院号扫码核销高值耗材。
+            </div>
+            <div class="node-badges">
+              <span class="badge badge-mcp">spd_secondary_inventory</span>
+              <span class="badge badge-mcp">spd_high_value_item</span>
+            </div>
+          </div>
+        </div>
+        <div class="flow-arrow">
+          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+        </div>
+        <div class="flow-node">
+          <div class="node-head">
+            <span>5. 财务科统计与单据打印</span>
+            <span class="node-step-id">财务科管理员</span>
+          </div>
+          <div class="node-body">
+            <div>
+              <strong>核心动作：</strong>基于“消耗即结算”法则汇总各科室真实耗材成本；多维统计查询（耗占比、科室排行、临期预警）；一键打印医院标准四联签字栏法定票据。
+            </div>
+            <div class="node-badges">
+              <span class="badge badge-route">is_billable = 1</span>
+              <span class="badge badge-mcp">5类四联单据打印</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 画布 2：智能体 1 -->
+    <section class="diagram-card" id="canvas-agent-01">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">二、 智能体 01：产品字典智能归类与主库入库合规审查智能体 (dict_inbound_guard_agent)</h2>
+          <p class="card-desc">服务对象：耗材科管理员、设备科管理员 | 核心价值：自动判定产品归口主科室与普通/高值分类，入库时硬性拦截过期注册证与临期/超温批次</p>
+        </div>
+        <span class="role-tag">LangGraph StateGraph + MCP + Chroma RAG</span>
+      </div>
+      <div class="flow-row">
+        <div class="flow-node">
+          <div class="node-head"><span>节点1: input_parse_node</span><span class="node-step-id">NODE 01</span></div>
+          <div class="node-body">
+            <div><strong>节点作用：</strong>解析录入的产品名称、规格型号、GS1-128 UDI 条码（拆解 DI 基准码、生产批号 10、效期 17）及到货实测温度。</div>
+            <div class="node-badges"><span class="badge badge-route">State: RawInput -> ParsedUDI</span></div>
+          </div>
+        </div>
+        <div class="flow-arrow"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></div>
+        <div class="flow-node">
+          <div class="node-head"><span>节点2: rag_catalog_node</span><span class="node-step-id">NODE 02</span></div>
+          <div class="node-body">
+            <div><strong>节点作用：</strong>调用 Chroma 向量库检索《国家医疗器械分类目录》与主库冷链验收 SOP，匹配法定管理类别与储运温湿度标准。</div>
+            <div class="node-badges"><span class="badge badge-rag">RAG: rag_search_medical_catalog</span></div>
+          </div>
+        </div>
+        <div class="flow-arrow"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></div>
+        <div class="flow-node">
+          <div class="node-head"><span>节点3: mcp_dict_check_node</span><span class="node-step-id">NODE 03</span></div>
+          <div class="node-body">
+            <div><strong>节点作用：</strong>通过 MCP 查询 MySQL `spd_product_dict` 表，核验医疗器械注册证 (`reg_cert_expiry`) 是否过期及批次剩余效期天数。</div>
+            <div class="node-badges"><span class="badge badge-mcp">MCP: mcp_query_product_dict</span></div>
+          </div>
+        </div>
+        <div class="flow-arrow"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></div>
+        <div class="flow-node">
+          <div class="node-head"><span>节点4: compliance_router</span><span class="node-step-id">ROUTER</span></div>
+          <div class="node-body">
+            <div><strong>节点作用：</strong>条件路由分支判定：判定归属【耗材科主库】或【设备科主库】、区分【普通/高值】；若证件过期或温度超标则转入拦截分支。</div>
+            <div class="node-badges"><span class="badge badge-route">Branch: PASS | REJECT_BLOCK</span></div>
+          </div>
+        </div>
+        <div class="flow-arrow"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></div>
+        <div class="flow-node">
+          <div class="node-head"><span>节点5: guard_output_node</span><span class="node-step-id">NODE 05</span></div>
+          <div class="node-body">
+            <div><strong>节点作用：</strong>输出结构化建档归类建议、推荐主库三维货位编码，或生成援引法规条款的《违规拒收拦截报告》。</div>
+            <div class="node-badges"><span class="badge badge-mcp">Log: 2_MAIN_INBOUND</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 画布 3：智能体 2 -->
+    <section class="diagram-card" id="canvas-agent-02">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">三、 智能体 02：主库全部物资智能按需分发与补货调拨智能体 (main_stock_dispatch_agent)</h2>
+          <p class="card-desc">服务对象：耗材科管理员、设备科管理员 | 核心价值：扫描主库总仓与各二级库库存水位，按 FEFO 原则自动生成发往二级库或高值仓的分发单</p>
+        </div>
+        <span class="role-tag">LangGraph StateGraph + MCP + Chroma RAG</span>
+      </div>
+      <div class="flow-row">
+        <div class="flow-node">
+          <div class="node-head"><span>节点1: mcp_stock_scan_node</span><span class="node-step-id">NODE 01</span></div>
+          <div class="node-body">
+            <div><strong>节点作用：</strong>通过 MCP 联查 MySQL 主库总仓 (`spd_main_inventory`) 与各临床二级库 (`spd_secondary_inventory`)，识别低于安全库存的缺口科室。</div>
+            <div class="node-badges"><span class="badge badge-mcp">MCP: mcp_scan_main_and_sec_stock</span></div>
+          </div>
+        </div>
+        <div class="flow-arrow"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></div>
+        <div class="flow-node">
+          <div class="node-head"><span>节点2: fefo_batch_lock_node</span><span class="node-step-id">NODE 02</span></div>
+          <div class="node-body">
+            <div><strong>节点作用：</strong>按 FEFO（近效期先出）原则自动筛选主库合格批次（剔除 EXPIRED 过期冻结批次），区分发往【临床二级库】或【高值耗材专仓】。</div>
+            <div class="node-badges"><span class="badge badge-route">Rule: FEFO &amp; Split-Code</span></div>
+          </div>
+        </div>
+        <div class="flow-arrow"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></div>
+        <div class="flow-node">
+          <div class="node-head"><span>节点3: rag_dispatch_rule_node</span><span class="node-step-id">NODE 03</span></div>
+          <div class="node-body">
+            <div><strong>节点作用：</strong>调用 Chroma RAG 检索《院内二级库定数包补货与高值耗材转仓管理制度》，校验单次调拨上限与冷链配送要求。</div>
+            <div class="node-badges"><span class="badge badge-rag">RAG: rag_search_dispatch_fefo_rule</span></div>
+          </div>
+        </div>
+        <div class="flow-arrow"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></div>
+        <div class="flow-node">
+          <div class="node-head"><span>节点4: mcp_create_order_node</span><span class="node-step-id">NODE 04</span></div>
+          <div class="node-body">
+            <div><strong>节点作用：</strong>通过 MCP 写库工具在 `spd_distribution_order` 表自动创建《按需分发调拨单》，写入 6W 流转日志并返回打印预览数据。</div>
+            <div class="node-badges"><span class="badge badge-mcp">MCP: mcp_create_dispatch_order</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 画布 4：智能体 3 -->
+    <section class="diagram-card" id="canvas-agent-03">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">四、 智能体 03：临床二级库自然语言申领与耗材规范问答智能体 (secondary_apply_qa_agent)</h2>
+          <p class="card-desc">服务对象：临床各科室二级库人员（护士/技师） | 核心价值：一句话匹配手术标准耗材包、解答器械使用规范，并按归口主科室自动提交申领单</p>
+        </div>
+        <span class="role-tag">LangGraph StateGraph + MCP + Chroma RAG</span>
+      </div>
+      <div class="flow-row">
+        <div class="flow-node">
+          <div class="node-head"><span>节点1: nl_intent_parse_node</span><span class="node-step-id">NODE 01</span></div>
+          <div class="node-body">
+            <div><strong>节点作用：</strong>解析二级库人员的自然语言输入（如“骨科二级库申请 2 台关节置换术标准耗材包”或询问某耗材 MRI 兼容条件）。</div>
+            <div class="node-badges"><span class="badge badge-route">Intent: APPLY_ORDER | QA_QUERY</span></div>
+          </div>
+        </div>
+        <div class="flow-arrow"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></div>
+        <div class="flow-node">
+          <div class="node-head"><span>节点2: rag_pack_manual_node</span><span class="node-step-id">NODE 02</span></div>
+          <div class="node-body">
+            <div><strong>节点作用：</strong>在 Chroma 向量库中检索《临床手术标准定数包配置清单》与《医疗耗材产品使用说明书》，提取所需物资编码与标准用量。</div>
+            <div class="node-badges"><span class="badge badge-rag">RAG: rag_search_surgery_pack_manual</span></div>
+          </div>
+        </div>
+        <div class="flow-arrow"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></div>
+        <div class="flow-node">
+          <div class="node-head"><span>节点3: mcp_verify_main_node</span><span class="node-step-id">NODE 03</span></div>
+          <div class="node-body">
+            <div><strong>节点作用：</strong>通过 MCP 查询 MySQL 主库余量，并读取 `spd_product_dict.main_dept_code` 识别每项物资归属【耗材科】还是【设备科】。</div>
+            <div class="node-badges"><span class="badge badge-mcp">MCP: mcp_check_main_available</span></div>
+          </div>
+        </div>
+        <div class="flow-arrow"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></div>
+        <div class="flow-node">
+          <div class="node-head"><span>节点4: mcp_submit_req_node</span><span class="node-step-id">NODE 04</span></div>
+          <div class="node-body">
+            <div><strong>节点作用：</strong>按归口主科室自动拆单写入 MySQL `spd_requisition_order` 表，记录 6W 流转日志节点 `6_SEC_APPLY` 并返回申领单号。</div>
+            <div class="node-badges"><span class="badge badge-mcp">MCP: mcp_submit_sec_requisition</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 画布 5：智能体 4 -->
+    <section class="diagram-card" id="canvas-agent-04">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">五、 智能体 04：高值耗材一物一码与跨用户流转日志全链路溯源智能体 (high_value_udi_trace_agent)</h2>
+          <p class="card-desc">服务对象：信息科系统管理员、耗材/设备科管理员 | 核心价值：穿透查询 6W 用户流转链，一键冻结问题批次（支持原生 LangGraph 与 Coze 双模运行）</p>
+        </div>
+        <span class="role-tag">LangGraph + MCP + Chroma RAG + Coze 双模协同</span>
+      </div>
+      <div class="flow-row">
+        <div class="flow-node">
+          <div class="node-head"><span>节点1: udi_sn_input_node</span><span class="node-step-id">NODE 01</span></div>
+          <div class="node-body">
+            <div><strong>节点作用：</strong>接收待溯源的高值耗材 UDI 唯一序列号 (`udi_sn`)、生产批号 (`batch_no`) 或关联业务单据号。</div>
+            <div class="node-badges"><span class="badge badge-route">Input: UDI_SN / BatchNo</span></div>
+          </div>
+        </div>
+        <div class="flow-arrow"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></div>
+        <div class="flow-node">
+          <div class="node-head"><span>节点2: mcp_6w_trace_node</span><span class="node-step-id">NODE 02</span></div>
+          <div class="node-body">
+            <div><strong>节点作用：</strong>通过 MCP 跨表穿透查询 `spd_high_value_item` 与 `spd_workflow_log`，完整还原“主库入库人 -> 分发人 -> 二级库接收人 -> 患者核销”链条。</div>
+            <div class="node-badges"><span class="badge badge-mcp">MCP: mcp_trace_udi_full_logs</span></div>
+          </div>
+        </div>
+        <div class="flow-arrow"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></div>
+        <div class="flow-node">
+          <div class="node-head"><span>节点3: mcp_batch_freeze_node</span><span class="node-step-id">NODE 03</span></div>
+          <div class="node-body">
+            <div><strong>节点作用：</strong>若触发不良事件召回指令，立即通过 MCP 将主库、高值仓、二级库内同批次未用耗材状态一键锁定为 `RECALLED`。</div>
+            <div class="node-badges"><span class="badge badge-mcp">MCP: mcp_freeze_problem_batch</span></div>
+          </div>
+        </div>
+        <div class="flow-arrow"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></div>
+        <div class="flow-node">
+          <div class="node-head"><span>节点4: rag_coze_report_node</span><span class="node-step-id">NODE 04</span></div>
+          <div class="node-body">
+            <div><strong>节点作用：</strong>检索 Chroma《医疗器械不良事件监测与召回法规》（或同步调用 Coze Bot API），生成含脱敏患者随访名单的应急召回报告。</div>
+            <div class="node-badges">
+              <span class="badge badge-rag">RAG: rag_search_recall_regulation</span>
+              <span class="badge badge-route">Coze Webhook Ready</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 画布 6：智能体 5 -->
+    <section class="diagram-card" id="canvas-agent-05">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">六、 智能体 05：多科室耗材统计精算与财务流转合规审计智能体 (finance_stat_audit_agent)</h2>
+          <p class="card-desc">服务对象：财务科管理员、信息科系统管理员 | 核心价值：按“移库不计费、消耗即结算”精算各二级库真实成本，排查异常流转日志</p>
+        </div>
+        <span class="role-tag">LangGraph StateGraph + MCP + Chroma RAG</span>
+      </div>
+      <div class="flow-row">
+        <div class="flow-node">
+          <div class="node-head"><span>节点1: mcp_cost_agg_node</span><span class="node-step-id">NODE 01</span></div>
+          <div class="node-body">
+            <div><strong>节点作用：</strong>调用 MCP 聚合统计各临床二级库的普通耗材消耗与高值耗材核销金额（筛选 `is_billable=1` 的已结算流水）。</div>
+            <div class="node-badges"><span class="badge badge-mcp">MCP: mcp_aggregate_dept_cost</span></div>
+          </div>
+        </div>
+        <div class="flow-arrow"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></div>
+        <div class="flow-node">
+          <div class="node-head"><span>节点2: mcp_log_anomaly_node</span><span class="node-step-id">NODE 02</span></div>
+          <div class="node-body">
+            <div><strong>节点作用：</strong>调用 MCP 扫描 `spd_workflow_log` 全流程日志，识别跨用户超时未签收、频繁差异拒收或单日消耗突增的异常记录。</div>
+            <div class="node-badges"><span class="badge badge-mcp">MCP: mcp_scan_abnormal_flow_logs</span></div>
+          </div>
+        </div>
+        <div class="flow-arrow"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></div>
+        <div class="flow-node">
+          <div class="node-head"><span>节点3: rag_finance_rule_node</span><span class="node-step-id">NODE 03</span></div>
+          <div class="node-body">
+            <div><strong>节点作用：</strong>从 Chroma 向量库检索《医院科室耗占比控制标准与财务内控审计规范》，对标各科室耗占比考核红线。</div>
+            <div class="node-badges"><span class="badge badge-rag">RAG: rag_search_finance_audit_rule</span></div>
+          </div>
+        </div>
+        <div class="flow-arrow"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></div>
+        <div class="flow-node">
+          <div class="node-head"><span>节点4: finance_report_node</span><span class="node-step-id">NODE 04</span></div>
+          <div class="node-body">
+            <div><strong>节点作用：</strong>自动输出《财务科月度科室耗材成本核算与流转审计报告》，并标记异常流转日志供信息科与财务科复核。</div>
+            <div class="node-badges"><span class="badge badge-route">Output: AuditReport &amp; PrintData</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    /**
+     * 切换业务与智能体流程图画布的亮色/暗色主题模式
+     * @param {string} [forceTheme] 可选强制指定的主题名称 ('light' | 'dark')
+     * @returns {string} 切换后当前生效的主题标识
+     * @route internal://docs/design/spd_business_and_agent_flowcharts.html/toggleThemeMode
+     * @throws {Error} 当 DOM 根节点缺失时抛出异常
+     */
+    function toggleThemeMode(forceTheme) {
+      const rootEl = document.documentElement;
+      if (!rootEl) {
+        throw new Error('文档根节点不存在');
+      }
+      const current = rootEl.getAttribute('data-theme') || 'light';
+      const next = forceTheme || (current === 'light' ? 'dark' : 'light');
+      rootEl.setAttribute('data-theme', next);
+      const labelEl = document.getElementById('theme-label');
+      if (labelEl) {
+        labelEl.textContent = next === 'light' ? '切换深色模式' : '切换浅色模式';
+      }
+      return next;
+    }
+  </script>
+</body>
+</html>

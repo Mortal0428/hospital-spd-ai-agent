@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>医院医疗物资全链路管理系统 (SPD + 多智能体协同) - 标准产品需求文档 (PRD)</title>
+  <style>
+    :root[data-theme="light"] {
+      --bg-page: #f8f8fc;
+      --bg-card: #ffffff;
+      --bg-th: #f1effb;
+      --bg-scope: #faf9ff;
+      --border-color: #dcd7f0;
+      --text-primary: #1e1b3a;
+      --text-secondary: #4a4468;
+      --accent-color: #4f46e5;
+    }
+
+    :root[data-theme="dark"] {
+      --bg-page: #0b0f19;
+      --bg-card: #111827;
+      --bg-th: #1e293b;
+      --bg-scope: #172033;
+      --border-color: #334155;
+      --text-primary: #f8fafc;
+      --text-secondary: #cbd5e1;
+      --accent-color: #818cf8;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 28px 36px;
+      background-color: var(--bg-page);
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.6;
+    }
+    .prd-shell {
+      max-width: 1280px;
+      margin: 0 auto;
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 32px 40px;
+    }
+    h1 { font-size: 24px; margin: 0 0 8px 0; }
+    h2 {
+      font-size: 18px;
+      margin: 28px 0 12px 0;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--border-color);
+      color: var(--accent-color);
+    }
+    h3 { font-size: 15px; margin: 18px 0 8px 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 18px;
+      font-size: 13px;
+    }
+    th, td {
+      border: 1px solid var(--border-color);
+      padding: 10px 14px;
+      vertical-align: top;
+      text-align: left;
+    }
+    th {
+      background-color: var(--bg-th);
+      font-weight: 700;
+    }
+    .scope-box {
+      background-color: var(--bg-scope);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 18px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .desc-block {
+      margin-bottom: 10px;
+    }
+    .desc-block p {
+      margin: 4px 0;
+      color: var(--text-secondary);
+    }
+    .desc-title {
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+  </style>
+</head>
+<body>
+  <div class="prd-shell" id="prdContent">
+    <h1>医院医疗物资全链路管理系统（SPD + 多智能体协同）产品需求文档 (PRD)</h1>
+    <p style="color:var(--text-secondary);font-size:13px;margin-top:0;">
+      遵循 edu-pm-workflow 工业级产品文档标准与 Harness 六大组件规范编制
+    </p>
+
+    <h2>1. 项目信息</h2>
+    <table>
+      <colgroup><col style="width:220px;"/><col/></colgroup>
+      <tbody>
+        <tr><th>项目名称</th><td>医院医疗物资全链路管理系统（SPD + LangGraph 多智能体协同平台）</td></tr>
+        <tr><th>核心人员角色</th><td>系统管理员（信息科最大权限）、科室管理员（耗材科/设备科/财务科）、临床科室人员（二级库）</td></tr>
+        <tr><th>数据库与后端规范</th><td>MySQL 8.0 + SQLAlchemy 2.0 声明式 ORM（强制 100% 表级与字段级中文 comment 注释）+ FastAPI + Redis + Chroma</td></tr>
+        <tr><th>关联交互原型与流程图</th><td><code>docs/design/spd_interactive_prototype.html</code> | <code>docs/design/spd_business_and_agent_flowcharts.html</code></td></tr>
+      </tbody>
+    </table>
+
+    <h2>2. 版本记录</h2>
+    <table>
+      <thead>
+        <tr><th>版本号</th><th>修订日期</th><th>修订人</th><th>修订内容说明</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>v1.0.0</td><td>2026-10-29</td><td>Orchestrator Agent</td><td>初始化医疗物资 SPD 业务全景与持久化浏览器测试底座</td></tr>
+        <tr><td>v2.0.0</td><td>2026-11-02</td><td>PM &amp; Architecture Agent</td><td>确立三级人员体系、产品字典双维分类、普通耗材按需分发、高值一物一码、二级库、6W全流程日志、PM六大规则与5大智能体流程图</td></tr>
+      </tbody>
+    </table>
+
+    <h2>3. 需求背景</h2>
+    <div class="desc-block">
+      <p><strong>（1）场景与痛点（Who &amp; What Problem）：</strong>在医院日常运营中，耗材科与设备科主库房管理员面对上千种普通耗材、高值植入耗材及设备维保配件时，缺乏清晰的“主库房归口主科室 + 耗材多级分类”体系；同时，主库向各临床科室二级库或高值耗材专仓分发时，传统手工台账无法区分“院内移库调拨”与“临床实际消耗”，导致账实不符、过期耗材流向临床以及跨用户物权交接责任不清。</p>
+      <p><strong>（2）业务影响（Business Impact）：</strong>若缺少严格的归口路由与“由量到码”一物一码追踪，一旦发生医疗器械不良事件，信息科与设备/耗材科无法在短时间内查清问题批次流向了哪个二级库、用在了哪位患者身上；财务科也无法准确核算各临床科室的真实耗占比。</p>
+      <p><strong>（3）支撑依据（Evidence）：</strong>依据国家药监局《医疗器械唯一标识（UDI）系统规则》及医院 SPD 精细化供应链管理标准，必须构建集“三级角色权限、5套核心业务 CRUD、6W全流程流转日志、标准四联签字单据打印与 5 大 MCP+RAG 智能体”于一体的全链路系统。</p>
+    </div>
+
+    <h2>4. 需求目标</h2>
+    <table>
+      <thead>
+        <tr><th>用户结果</th><th>衡量指标</th><th>统计口径</th><th>预期方向</th><th>目标值</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>实现全院物资从主库到二级库/高值仓及患者核销的 100% 留痕追溯</td>
+          <td>6W 全流程流转日志覆盖率</td>
+          <td>产生 6W 日志的业务单据数 / 全院总业务单据数</td>
+          <td>提升</td>
+          <td>100%</td>
+        </tr>
+        <tr>
+          <td>杜绝过期耗材或无证产品流入临床科室使用</td>
+          <td>过期/违规批次拦截率</td>
+          <td>被系统护栏与智能体01成功阻断的违规入库/分发次数占比</td>
+          <td>提升</td>
+          <td>100% 硬拦截</td>
+        </tr>
+        <tr>
+          <td>赋能信息科、耗材/设备/财务科与临床二级库智能化协同</td>
+          <td>智能体工具闭环率</td>
+          <td>5 个 LangGraph 智能体成功调用 MCP 业务库与 Chroma RAG 的比例</td>
+          <td>达标</td>
+          <td>5 大智能体 100% 闭环</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>5. 需求概述（含范围块与跨页全局业务规则）</h2>
+    <div class="scope-box">
+      <div>
+        <h3>本期范围（Must-Have）</h3>
+        <div class="desc-block">
+          <p>1. 三级角色登录、注册与用户科室管理（信息科、耗材科/设备科/财务科、临床二级库）。</p>
+          <p>2. 5 套核心业务 CRUD：产品字典（主科室归口+耗材分类）、普通耗材管理（主库总仓与按需分发）、高值耗材管理（一物一码专仓）、二级库管理（临床科室库房）、全流程业务链路日志（6W 物权交接 CRUD）。</p>
+          <p>3. 多维度统计查询与 5 类医院标准四联签字单据打印。</p>
+          <p>4. 5 大业务智能体（LangChain + LangGraph + MCP 协议 + Chroma RAG + MySQL + 可选 Coze）。</p>
+        </div>
+      </div>
+      <div>
+        <h3>本期不做什么·暂不展开（Out-of-Scope）</h3>
+        <div class="desc-block">
+          <p>1. 暂不直连医院外部真实医保局专线与银行实时扣款网关（财务结算以院内科室成本核算与结算单生成为准）。</p>
+          <p>2. 暂不对接物理 RFID 智能柜串口硬件底层驱动（通过前端标准 UDI 条码扫描/输入交互模拟硬件扫码）。</p>
+        </div>
+      </div>
+    </div>
+
+    <h3>5.1 跨页全局业务规则表（PM 六大深度业务规则）</h3>
+    <table>
+      <thead>
+        <tr><th>规则编号</th><th>规则名称</th><th>跨页面全局约束说明</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Rule 01</td><td>主科室归口专管与申领自动分流</td><td>产品字典唯一绑定归口主科室（耗材科主库 / 设备科主库）；二级库发起申领时按归口自动路由，耗材科与设备科各自审发本部门管辖物资。</td></tr>
+        <tr><td>Rule 02</td><td>主库总仓统管与“由量到码”分拨转换</td><td>外购物资统一先入主库总仓；分发至临床二级库按“批次+数量”调拨；转入高值耗材仓库时强制触发“批次拆包赋一物一码（UDI-SN）”。</td></tr>
+        <tr><td>Rule 03</td><td>“移库不计费、消耗即结算”两阶段财务记账</td><td>主库向二级库/高值仓按需分发仅作库房位置转移（is_billable=0）；二级库日常消耗或高值耗材绑定患者核销时才计入科室成本（is_billable=1）。</td></tr>
+        <tr><td>Rule 04</td><td>效期硬拦截、FEFO 与逆向退库回路</td><td>过期批次（EXPIRED）硬性禁止分发与核销；主库分发默认按 FEFO 近效期先出推荐；支持二级库签收拒收退回、逆向退库与报损核销。</td></tr>
+        <tr><td>Rule 05</td><td>全流程日志 6W 物权责任交接契约</td><td>8 大业务动作节点均强制记录：物资批次/UDI、流转节点、交出科室与操作人、接收科室与责任人、变动数量与前后库存快照、审计状态。</td></tr>
+        <tr><td>Rule 06</td><td>医院标准 5 类法定单据四联签字打印</td><td>所有打印票据强制包含单据编号条码、批次效期明细及票尾【制单人 / 主库科室主管 / 二级库接收人 / 财务科复核】四联签字栏。</td></tr>
+      </tbody>
+    </table>
+
+    <h2>6. 详细方案</h2>
+    <table>
+      <colgroup>
+        <col style="width:180px;"/>
+        <col style="width:220px;"/>
+        <col/>
+      </colgroup>
+      <thead>
+        <tr><th>一级模块</th><th>二级页面/状态</th><th>页面元素、交互说明与边界规则</th></tr>
+      </thead>
+      <tbody>
+        <tr data-preview="tab-dict">
+          <td>产品字典管理</td>
+          <td>主科室归口与耗材多级分类字典视图</td>
+          <td>
+            <div class="desc-block">
+              <div class="desc-title">【页面元素】</div>
+              <p>1. 左侧双维分类树：包含维度一“主库房下的主科室（耗材科主库、设备科主库）”与维度二“耗材分类（普通耗材、高值耗材、设备配件）”。</p>
+              <p>2. 右侧字典数据表：展示产品编码、名称、规格、14位 UDI-DI 码、归口主科室标签、耗材分类标签、注册证号与到期日、基准单价、安全库存阈值。</p>
+            </div>
+            <div class="desc-block">
+              <div class="desc-title">【交互说明】</div>
+              <p>1. 点击左侧任一主科室或分类节点，右侧表格实时过滤对应物资。</p>
+              <p>2. 支持新增、编辑、软删除产品字典，或唤起智能体 01 自动识别产品归属主科室与分类。</p>
+            </div>
+            <div class="desc-block">
+              <div class="desc-title">【边界说明】</div>
+              <p>1. 删除产品字典时，系统自动检查主库、高值仓及各二级库当前可用库存；若任一库房库存大于 0，弹窗阻断删除。</p>
+            </div>
+          </td>
+        </tr>
+        <tr data-preview="tab-main-wh">
+          <td>普通耗材管理</td>
+          <td>主库全部物资批次总仓与按需分发视图</td>
+          <td>
+            <div class="desc-block">
+              <div class="desc-title">【页面元素】</div>
+              <p>1. 主库批次库存表：展示入库单号、物资名称、生产批号、有效期至、主库可用余量、三维货位编码、效期状态标签。</p>
+              <p>2. 按需分发操作区：提供“按需分发至临床二级库”与“转入高值耗材仓库（拆包赋码）”操作按钮及单据打印按钮。</p>
+            </div>
+            <div class="desc-block">
+              <div class="desc-title">【交互说明】</div>
+              <p>1. 耗材科/设备科管理员创建按需分发单时，系统自动按 FEFO（近效期先出）优先选中合格批次。</p>
+              <p>2. 确认分发后扣减主库库存，生成分发单据并自动写入全流程流转日志节点 <code>3_MAIN_DISPATCH</code>。</p>
+            </div>
+            <div class="desc-block">
+              <div class="desc-title">【边界说明】</div>
+              <p>1. 当批次状态为 <code>EXPIRED</code>（已过期）或 <code>RECALLED</code>（召回锁定）时，分发按钮强制禁用拦截。</p>
+            </div>
+          </td>
+        </tr>
+        <tr data-preview="tab-high-value">
+          <td>高值耗材管理 &amp; 二级库管理</td>
+          <td>一物一码专仓台账与临床二级库申领核销视图</td>
+          <td>
+            <div class="desc-block">
+              <div class="desc-title">【页面元素】</div>
+              <p>1. 高值专仓表：展示完整 GS1-128 UDI 条码、单品唯一序列号（SN）、来源分发单号、当前所在专柜、单品状态及绑定患者脱敏信息。</p>
+              <p>2. 临床二级库表：展示所属二级库科室、定向审批主科室、二级库当前余量、累计已消耗数量与安全库存预警状态。</p>
+            </div>
+            <div class="desc-block">
+              <div class="desc-title">【交互说明】</div>
+              <p>1. 临床二级库人员可一键签收主库分发单（增加二级库库存），或登记日常消耗/绑定患者住院号扫码核销高值耗材。</p>
+            </div>
+            <div class="desc-block">
+              <div class="desc-title">【边界说明】</div>
+              <p>1. 高值耗材核销时必须填写患者住院号与主刀医生，核销后患者姓名自动执行隐私脱敏展示（如：张*丰）。</p>
+            </div>
+          </td>
+        </tr>
+        <tr data-preview="tab-logs">
+          <td>全流程日志、统计打印与智能体</td>
+          <td>6W 物权交接日志、四联单据打印与 5 大智能体工作台</td>
+          <td>
+            <div class="desc-block">
+              <div class="desc-title">【页面元素】</div>
+              <p>1. 6W 全流程日志表：展示日志流水号、8大业务节点、关联单据、交出科室/交出人、接收科室/接收人、变动数量与前后库存快照、计费标识与审计状态。</p>
+              <p>2. 5 大智能体交互台与四联签字栏单据打印预览弹窗。</p>
+            </div>
+            <div class="desc-block">
+              <div class="desc-title">【交互说明】</div>
+              <p>1. 信息科管理员可对全流程日志执行增删改查与异常标注；财务科与各科室可一键预览并打印 5 类带四联签字栏的标准单据。</p>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>

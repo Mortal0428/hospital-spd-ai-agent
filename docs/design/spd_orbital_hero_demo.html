@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:,">
+    <title>医院医疗物资全链路管理系统 - 数字化全景展厅 (轨道画廊展示大屏)</title>
+    <style>
+        /* =========================================================================
+           1. 全局设计变量与主题 Tokens (符合 Apple HIG 与 21st.dev 工业级规范)
+           ========================================================================= */
+        :root {
+            --bg-page: #f8fafc;
+            --bg-card: rgba(255, 255, 255, 0.88);
+            --bg-card-hover: rgba(255, 255, 255, 0.98);
+            --border-card: rgba(226, 232, 240, 0.9);
+            --border-divider: rgba(226, 232, 240, 0.7);
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #64748b;
+            --accent-primary: #0284c7;
+            --accent-gradient: linear-gradient(135deg, #0284c7 0%, #06b6d4 50%, #2563eb 100%);
+            --shadow-card: 0 12px 36px -4px rgba(15, 23, 42, 0.12), 0 4px 12px -2px rgba(15, 23, 42, 0.06);
+            --radius-card: 16px;
+            --radius-pill: 9999px;
+            --orbit-size: 1040px; /* 直径 */
+            --orbit-radius: 520px; /* 半径 */
+            --orbit-duration: 38s;
+        }
+
+        [data-theme="dark"] {
+            --bg-page: #080c14;
+            --bg-card: rgba(15, 23, 42, 0.85);
+            --bg-card-hover: rgba(30, 41, 59, 0.95);
+            --border-card: rgba(255, 255, 255, 0.12);
+            --border-divider: rgba(255, 255, 255, 0.1);
+            --text-primary: #f8fafc;
+            --text-secondary: #cbd5e1;
+            --text-muted: #94a3b8;
+            --accent-primary: #38bdf8;
+            --accent-gradient: linear-gradient(135deg, #38bdf8 0%, #22d3ee 50%, #60a5fa 100%);
+            --shadow-card: 0 16px 40px -4px rgba(0, 0, 0, 0.6), 0 4px 16px -2px rgba(0, 0, 0, 0.4);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", sans-serif;
+            background: var(--bg-page);
+            color: var(--text-primary);
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            user-select: none;
+            -webkit-user-select: none;
+            transition: background 250ms ease-out, color 250ms ease-out;
+        }
+
+        /* 纯矢量 SVG 图标公共类 (严禁 Emoji) */
+        .svg-icon {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            stroke-width: 1.8;
+            stroke: currentColor;
+            fill: none;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            vertical-align: middle;
+            flex-shrink: 0;
+        }
+
+        /* 顶部通透悬浮工具栏 */
+        .top-float-nav {
+            position: fixed;
+            top: 20px;
+            left: 28px;
+            right: 28px;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            pointer-events: none;
+        }
+
+        .brand-badge {
+            pointer-events: auto;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--bg-card);
+            -webkit-backdrop-filter: blur(16px);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-card);
+            border-radius: var(--radius-pill);
+            padding: 8px 16px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+        }
+
+        .brand-logo {
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            background: linear-gradient(135deg, #0284c7, #0ea5e9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+        }
+
+        .brand-title {
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: -0.2px;
+            color: var(--text-primary);
+        }
+
+        .nav-actions {
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-theme {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: var(--bg-card);
+            -webkit-backdrop-filter: blur(16px);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-card);
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 150ms ease-out;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+
+        .btn-theme:active {
+            transform: scale(0.92);
+        }
+
+        .link-workbench {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--bg-card);
+            -webkit-backdrop-filter: blur(16px);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-card);
+            color: var(--text-primary);
+            padding: 8px 16px;
+            border-radius: var(--radius-pill);
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: transform 150ms ease-out;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+
+        .link-workbench:active {
+            transform: scale(0.96);
+        }
+
+        /* 背景放射景深与同心轨道线 */
+        .stage-backdrop {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .stage-radial-glow {
+            position: absolute;
+            width: 900px;
+            height: 900px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(2, 132, 199, 0.12) 0%, rgba(6, 182, 212, 0.04) 45%, transparent 70%);
+        }
+
+        .orbit-track-ring {
+            position: absolute;
+            width: var(--orbit-size);
+            height: var(--orbit-size);
+            border-radius: 50%;
+            border: 1px dashed var(--border-divider);
+            opacity: 0.8;
+        }
+
+        .orbit-inner-ring {
+            position: absolute;
+            width: 760px;
+            height: 760px;
+            border-radius: 50%;
+            border: 1px solid var(--border-divider);
+            opacity: 0.4;
+        }
+
+        /* =========================================================================
+           2. 核心轨道运动与反向自转抵消 (Orbital Mathematics & Counter-Rotation)
+           ========================================================================= */
+        .orbit-carousel-rig {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            animation: rig-orbit var(--orbit-duration) linear infinite;
+            will-change: transform;
+        }
+
+        @keyframes rig-orbit {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* 各个卡片的极坐标定位桩 */
+        .orbit-satellite-slot {
+            position: absolute;
+            width: 0;
+            height: 0;
+        }
+
+        /* 卡片自身反向自转动画：角速度与公转严格一致，方向相反，抵消倒立 */
+        .satellite-counter-spin {
+            position: absolute;
+            top: 0;
+            left: 0;
+            animation: card-counter-spin var(--orbit-duration) linear infinite;
+            will-change: transform;
+        }
+
+        @keyframes card-counter-spin {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(-360deg); }
+        }
+
+        /* 医疗卡片主体样式 */
+        .medical-card-pod {
+            width: 250px;
+            height: 136px;
+            border-radius: var(--radius-card);
+            background: var(--bg-card);
+            -webkit-backdrop-filter: blur(18px) saturate(1.8);
+            backdrop-filter: blur(18px) saturate(1.8);
+            border: 1px solid var(--border-card);
+            box-shadow: var(--shadow-card);
+            padding: 14px 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            overflow: hidden;
+            transition: transform 180ms ease-out, border-color 180ms ease-out, box-shadow 180ms ease-out;
+            cursor: pointer;
+        }
+
+        .medical-card-pod:hover {
+            transform: scale(1.06);
+            border-color: var(--accent-primary);
+            box-shadow: 0 20px 48px -6px rgba(2, 132, 199, 0.25);
+        }
+
+        .card-ambient-tint {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 40px;
+            opacity: 0.15;
+            pointer-events: none;
+            background: linear-gradient(180deg, var(--accent-primary) 0%, transparent 100%);
+        }
+
+        .card-top-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: relative;
+            z-index: 2;
+        }
+
+        .card-tag {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 2px 7px;
+            border-radius: var(--radius-pill);
+            background: rgba(2, 132, 199, 0.12);
+            color: var(--accent-primary);
+            border: 1px solid rgba(2, 132, 199, 0.2);
+            letter-spacing: 0.2px;
+        }
+
+        .card-id-num {
+            font-size: 11px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        .card-body-meta {
+            position: relative;
+            z-index: 2;
+        }
+
+        .card-headline {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1.35;
+            margin-bottom: 3px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .card-subtext {
+            font-size: 11px;
+            color: var(--text-muted);
+            line-height: 1.3;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .card-bottom-indicator {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 10px;
+            font-weight: 600;
+            color: #059669;
+            position: relative;
+            z-index: 2;
+        }
+
+        .pulse-mini-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #10b981;
+            box-shadow: 0 0 8px #10b981;
+        }
+
+        /* =========================================================================
+           3. 中央静态主舞台 (Center Stage)
+           ========================================================================= */
+        .hero-stage-center {
+            position: relative;
+            z-index: 50;
+            max-width: 820px;
+            width: 100%;
+            padding: 40px 32px 32px;
+            background: var(--bg-card);
+            -webkit-backdrop-filter: blur(28px) saturate(2);
+            backdrop-filter: blur(28px) saturate(2);
+            border: 1px solid var(--border-card);
+            border-radius: 28px;
+            box-shadow: 0 24px 64px -12px rgba(15, 23, 42, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.2) inset;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .hero-pill-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 14px;
+            border-radius: var(--radius-pill);
+            background: rgba(2, 132, 199, 0.08);
+            border: 1px solid rgba(2, 132, 199, 0.18);
+            color: var(--accent-primary);
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .badge-live-pulse {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+            box-shadow: 0 0 10px #10b981;
+            animation: pulse-ring 2s infinite;
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.3); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.8; }
+        }
+
+        .hero-h1 {
+            font-size: 40px;
+            font-weight: 800;
+            line-height: 1.15;
+            letter-spacing: -1px;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+        }
+
+        .gradient-span {
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero-summary-p {
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            max-width: 620px;
+            margin: 0 auto 26px;
+        }
+
+        /* 核心 CTA 按钮组 */
+        .cta-btn-group {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            margin-bottom: 32px;
+        }
+
+        .btn-cta-main {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 28px;
+            border-radius: var(--radius-pill);
+            background: var(--accent-primary);
+            color: #ffffff;
+            font-size: 14px;
+            font-weight: 700;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 8px 24px rgba(2, 132, 199, 0.35);
+            transition: transform 120ms ease-out, background 150ms ease-out;
+            text-decoration: none;
+        }
+
+        .btn-cta-main:hover {
+            background: #0369a1;
+        }
+
+        .btn-cta-main:active {
+            transform: scale(0.96);
+        }
+
+        .btn-cta-secondary {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            border-radius: var(--radius-pill);
+            background: var(--bg-card);
+            color: var(--text-primary);
+            font-size: 14px;
+            font-weight: 600;
+            border: 1px solid var(--border-card);
+            cursor: pointer;
+            transition: transform 120ms ease-out, background 150ms ease-out;
+        }
+
+        .btn-cta-secondary:hover {
+            background: var(--bg-card-hover);
+        }
+
+        .btn-cta-secondary:active {
+            transform: scale(0.96);
+        }
+
+        /* 底部三列三甲医院法定合规指标 */
+        .legal-metrics-grid {
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            border-top: 1px solid var(--border-divider);
+            padding-top: 22px;
+            gap: 16px;
+        }
+
+        .metric-col {
+            padding: 0 10px;
+            text-align: center;
+        }
+
+        .metric-col:not(:last-child) {
+            border-right: 1px solid var(--border-divider);
+        }
+
+        .metric-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .metric-desc {
+            font-size: 11px;
+            color: var(--text-muted);
+            line-height: 1.45;
+        }
+
+        /* 智能体协同简易抽屉弹层 */
+        .agent-modal-quick {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.6);
+            -webkit-backdrop-filter: blur(8px);
+            backdrop-filter: blur(8px);
+            z-index: 200;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .agent-modal-quick.open {
+            display: flex;
+        }
+
+        .agent-dialog-content {
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: 20px;
+            padding: 28px;
+            max-width: 640px;
+            width: 100%;
+            box-shadow: 0 24px 64px rgba(0, 0, 0, 0.3);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 顶部通透悬浮工具栏 -->
+    <nav class="top-float-nav">
+        <div class="brand-badge">
+            <div class="brand-logo">
+                <svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 2v20M2 12h20M7 7l10 10M17 7L7 17"></path></svg>
+            </div>
+            <div class="brand-title">医院医疗物资全链路管理系统 · SPD 数字化展厅</div>
+        </div>
+
+        <div class="nav-actions">
+            <!-- 快速返回多变体工作台原型 -->
+            <a href="spd_frontend_design_variants.html" class="link-workbench" id="btn-back-variants">
+                <svg class="svg-icon" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>
+                <span>工作台原型选型器</span>
+            </a>
+
+            <!-- 亮暗主题切换 -->
+            <button class="btn-theme" id="theme-toggle-btn" aria-label="切换亮暗主题">
+                <svg class="svg-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+            </button>
+        </div>
+    </nav>
+
+    <!-- 背景景深光晕与轨道基准圆环 -->
+    <div class="stage-backdrop">
+        <div class="stage-radial-glow"></div>
+        <div class="orbit-inner-ring"></div>
+        <div class="orbit-track-ring"></div>
+    </div>
+
+    <!-- 核心轨道运动旋转架 (数学极坐标 + 反向自转抵消) -->
+    <div class="orbit-carousel-rig" id="orbit-rig">
+        <!-- 10 个卡片槽位将通过 JS 极坐标算法注入 -->
+    </div>
+
+    <!-- 中央静态主舞台 -->
+    <main class="hero-stage-center" id="hero-main-stage">
+        <!-- 状态微徽标 -->
+        <div class="hero-pill-badge">
+            <span class="badge-live-pulse"></span>
+            <span>医疗物资全链路 SPD + 多智能体协同运营平台 v2.0</span>
+        </div>
+
+        <!-- 主标题 -->
+        <h1 class="hero-h1">
+            智慧医疗 物资全链<br>
+            <span class="gradient-span">全生命周期物权穿透与智能协同</span>
+        </h1>
+
+        <!-- 副标题描述 -->
+        <p class="hero-summary-p">
+            覆盖耗材/设备主库房、高值一物一码专仓、临床各科室二级库与财务审计中心，
+            基于 LangGraph 与 MCP 协议驱动 5 大医疗业务智能体协同运转。
+        </p>
+
+        <!-- CTA 核心按钮 -->
+        <div class="cta-btn-group">
+            <a href="spd_frontend_design_variants.html" class="btn-cta-main" id="btn-enter-workbench">
+                <svg class="svg-icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                <span>进入三级角色工作台</span>
+            </a>
+            <button class="btn-cta-secondary" id="btn-open-agents-quick">
+                <svg class="svg-icon" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="10" rx="2"></rect><circle cx="12" cy="5" r="2"></circle><path d="M12 7v4M8 16h0.01M16 16h0.01"></path></svg>
+                <span>呼出 5 大业务智能体</span>
+            </button>
+        </div>
+
+        <!-- 底部三大法定合规指标卡 -->
+        <div class="legal-metrics-grid">
+            <div class="metric-col">
+                <div class="metric-title">
+                    <svg class="svg-icon" style="color:#0284c7;" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                    <span>100% 审计穿透</span>
+                </div>
+                <div class="metric-desc">
+                    6W 物权交接流转全流程日志闭环，满足医保与卫健委飞行检查要求。
+                </div>
+            </div>
+
+            <div class="metric-col">
+                <div class="metric-title">
+                    <svg class="svg-icon" style="color:#10b981;" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                    <span>一物一码单品</span>
+                </div>
+                <div class="metric-desc">
+                    高值专仓拆包赋唯一 UDI 序列号，扫码核销绑定患者住院号并合规脱敏。
+                </div>
+            </div>
+
+            <div class="metric-col">
+                <div class="metric-title">
+                    <svg class="svg-icon" style="color:#f59e0b;" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                    <span>移库不计费</span>
+                </div>
+                <div class="metric-desc">
+                    院内科室调拨不计入成本，临床实际消耗即结算，理顺医院财务内控。
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 5 大智能体快速交互弹窗 -->
+    <div class="agent-modal-quick" id="agent-modal">
+        <div class="agent-dialog-content">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <h3 style="font-size:16px; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
+                    <svg class="svg-icon" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="10" rx="2"></rect><circle cx="12" cy="5" r="2"></circle><path d="M12 7v4M8 16h0.01M16 16h0.01"></path></svg>
+                    <span>系统内置 5 大医疗物资业务智能体</span>
+                </h3>
+                <button class="btn-theme" style="width:28px; height:28px;" onclick="document.getElementById('agent-modal').classList.remove('open')">
+                    <svg class="svg-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:10px; font-size:12px;">
+                <div style="padding:10px; border-radius:8px; background:var(--bg-page); border:1px solid var(--border-card);">
+                    <strong>Agent 01:</strong> 产品字典归类与入库合规审查智能体 (挂载 mcp_query_product_dict 与分类目录 RAG)
+                </div>
+                <div style="padding:10px; border-radius:8px; background:var(--bg-page); border:1px solid var(--border-card);">
+                    <strong>Agent 02:</strong> 主库全部物资智能按需分发调拨智能体 (按 FEFO 近效期先出自动生成分发单)
+                </div>
+                <div style="padding:10px; border-radius:8px; background:var(--bg-page); border:1px solid var(--border-card);">
+                    <strong>Agent 03:</strong> 临床二级库自然语言申领与问答智能体 (匹配手术定数包与主库余量核验)
+                </div>
+                <div style="padding:10px; border-radius:8px; background:var(--bg-page); border:1px solid var(--border-card);">
+                    <strong>Agent 04:</strong> 高值耗材一物一码与全链路 UDI 穿透溯源智能体 (还原人物流转链并冻结问题批次)
+                </div>
+                <div style="padding:10px; border-radius:8px; background:var(--bg-page); border:1px solid var(--border-card);">
+                    <strong>Agent 05:</strong> 多科室耗材统计精算与财务流转合规审计智能体 (输出月度内控与审计单)
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 注入环形卡片极坐标分布与交互逻辑 -->
+    <script>
+        // 10 大医疗物资核心业务卡片定义
+        const medicalOrbitAssets = [
+            { id: "01", tag: "药监局UDI", title: "产品字典双维分类", sub: "耗材科/设备科主库归口管理", status: "已建档 5 项标准物料" },
+            { id: "02", tag: "效期硬风控", title: "主库全部物资管理", sub: "采购验收入库与注册证比对", status: "主库在库 1,870 件" },
+            { id: "03", tag: "FEFO优先", title: "主库按需分发调拨", sub: "近效期先出 · 移库不计费", status: "已下发调拨单 200 支" },
+            { id: "04", tag: "一物一码SN", title: "高值耗材专仓", sub: "由量到码拆包赋唯一序列号", status: "专柜在库锁定 37 套" },
+            { id: "05", tag: "定数包补货", title: "临床二级库房管理", sub: "骨科/心内科病区智能预警", status: "低库存自动申领就绪" },
+            { id: "06", tag: "消耗即结算", title: "患者扫码脱敏核销", sub: "绑定住院号与主刀医生计费", status: "已脱敏记账: 张*丰" },
+            { id: "07", tag: "100%穿透", title: "全流程 6W 物权台账", sub: "记录人/物/流转/库存快照", status: "审计合规率 100%" },
+            { id: "08", tag: "法定单据", title: "医院四联单据打印", sub: "制单/主库/领用/财务四联签字", status: "符合三甲内控规范" },
+            { id: "09", tag: "智能调拨", title: "Agent 02 补货智能体", sub: "LangGraph 驱动多库房水位扫描", status: "运行中 · 毫秒级响应" },
+            { id: "10", tag: "不良召回", title: "Agent 04 溯源与召回", sub: "UDI 穿透溯源与问题批次冻结", status: "全链路逆向闭环" }
+        ];
+
+        const orbitRig = document.getElementById("orbit-rig");
+        const radius = 520; // 520px 轨道半径
+        const totalCards = medicalOrbitAssets.length;
+
+        // 三角函数极坐标分布注入
+        medicalOrbitAssets.forEach((item, index) => {
+            const angleDeg = (index * 360) / totalCards;
+            const angleRad = (angleDeg * Math.PI) / 180;
+            const x = Math.round(Math.cos(angleRad) * radius);
+            const y = Math.round(Math.sin(angleRad) * radius);
+
+            const slot = document.createElement("div");
+            slot.className = "orbit-satellite-slot";
+            slot.style.transform = `translate(${x}px, ${y}px)`;
+
+            slot.innerHTML = `
+                <div class="satellite-counter-spin">
+                    <div class="medical-card-pod" data-card-id="${item.id}" onclick="location.href='spd_frontend_design_variants.html'">
+                        <div class="card-ambient-tint"></div>
+                        <div class="card-top-row">
+                            <span class="card-tag">${item.tag}</span>
+                            <span class="card-id-num">#${item.id}</span>
+                        </div>
+                        <div class="card-body-meta">
+                            <div class="card-headline">${item.title}</div>
+                            <div class="card-subtext">${item.sub}</div>
+                        </div>
+                        <div class="card-bottom-indicator">
+                            <span class="pulse-mini-dot"></span>
+                            <span>${item.status}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            orbitRig.appendChild(slot);
+        });
+
+        // 亮暗主题切换
+        const themeBtn = document.getElementById("theme-toggle-btn");
+        themeBtn.addEventListener("click", () => {
+            const currentTheme = document.documentElement.getAttribute("data-theme");
+            const targetTheme = currentTheme === "dark" ? "light" : "dark";
+            document.documentElement.setAttribute("data-theme", targetTheme);
+        });
+
+        // 呼出智能体快速弹窗
+        document.getElementById("btn-open-agents-quick").addEventListener("click", () => {
+            document.getElementById("agent-modal").classList.add("open");
+        });
+    </script>
+</body>
+</html>

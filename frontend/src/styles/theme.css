@@ -1,0 +1,1147 @@
+/**
+ * @file theme.css
+ * @description 医院医疗物资数字化展厅 (SPD Showcase) 全局设计系统 Tokens 与微交互动效
+ * 严格对齐 docs/design/spd_integrated_showcase_demo.html 工业级标准。
+ * 包含深空 (:root / [data-theme="dark"]) 与极简白瓷 ([data-theme="light"]) 双模态变量体系、
+ * 核心微交互动画关键帧 (流体笔刷 spdDrow1~5、双环脉冲 spdSpin/spdPulsePing、动态底线展开)、
+ * 毛玻璃卡片与微边框标准实用类，并向下兼容全量业务视图与四联法定单据打印样式。
+ *
+ * @param 无 (全局样式表)
+ * @returns CSS 变量与原子样式类
+ * @route internal://src/styles/theme.css
+ * @throws 无
+ */
+
+/* =========================================================================
+   1. 全局设计系统与主题 Tokens (深空暗色模式 :root / [data-theme="dark"])
+   ========================================================================= */
+:root {
+  --bg-page: #080c14;
+  --bg-card: rgba(15, 23, 42, 0.85);
+  --bg-card-hover: rgba(30, 41, 59, 0.95);
+  --border-card: rgba(255, 255, 255, 0.14);
+  --border-divider: rgba(255, 255, 255, 0.08);
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --accent-primary: #38bdf8;
+  --accent-gradient: linear-gradient(135deg, #38bdf8 0%, #22d3ee 50%, #60a5fa 100%);
+  --shadow-card: 0 20px 48px -6px rgba(0, 0, 0, 0.65), 0 4px 16px -2px rgba(0, 0, 0, 0.4);
+  --radius-card: 20px;
+  --radius-pill: 9999px;
+  --tile-bg: rgba(15, 23, 42, 0.88);
+  --tile-border: rgba(255, 255, 255, 0.16);
+
+  /* 壁纸调光与轨道几何变量 */
+  --wp-dim: 0.55;
+  --wp-blur: 8px;
+  --orbit-size: 1040px;
+  --orbit-radius: 520px;
+  --orbit-duration: 38s;
+
+  /* 状态色彩 Tokens (深空暗色) */
+  --color-success: #34d399;
+  --color-success-bg: rgba(52, 211, 153, 0.16);
+  --color-warning: #fbbf24;
+  --color-warning-bg: rgba(251, 191, 36, 0.16);
+  --color-danger: #f87171;
+  --color-danger-bg: rgba(248, 113, 113, 0.16);
+  --color-info: #818cf8;
+  --color-info-bg: rgba(129, 140, 248, 0.16);
+
+  /* 向下兼容存量组件与视图变量契约 */
+  --spd-bg-app: var(--bg-page);
+  --spd-bg-surface: var(--bg-card);
+  --spd-bg-subtle: #1e293b;
+  --spd-bg-muted: #1e293b;
+  --spd-bg-hover: rgba(56, 189, 248, 0.15);
+  --spd-bg-glass: rgba(15, 23, 42, 0.88);
+
+  --spd-border-subtle: var(--border-divider);
+  --spd-border-base: rgba(51, 65, 85, 0.8);
+  --spd-border-strong: var(--border-card);
+
+  --spd-text-main: var(--text-primary);
+  --spd-text-regular: var(--text-secondary);
+  --spd-text-muted: var(--text-muted);
+  --spd-text-subtle: #64748b;
+
+  --spd-primary: var(--accent-primary);
+  --spd-primary-hover: #7dd3fc;
+  --spd-primary-light: rgba(56, 189, 248, 0.16);
+
+  --spd-success: var(--color-success);
+  --spd-success-light: var(--color-success-bg);
+  --spd-warning: var(--color-warning);
+  --spd-warning-light: var(--color-warning-bg);
+  --spd-danger: var(--color-danger);
+  --spd-danger-light: var(--color-danger-bg);
+  --spd-info: var(--color-info);
+  --spd-info-light: var(--color-info-bg);
+
+  --spd-shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --spd-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --spd-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --spd-shadow-modal: 0 20px 48px -4px rgba(0, 0, 0, 0.7);
+
+  --spd-radius-sm: 6px;
+  --spd-radius-md: 10px;
+  --spd-radius-lg: 16px;
+
+  --bg-app: var(--bg-page);
+  --bg-surface: var(--bg-card);
+  --bg-subtle: #1e293b;
+  --bg-hover: rgba(56, 189, 248, 0.15);
+  --border-base: var(--border-divider);
+  --border-strong: var(--border-card);
+  --text-main: var(--text-primary);
+  --text-regular: var(--text-secondary);
+  --brand-primary: var(--accent-primary);
+  --brand-soft: rgba(56, 189, 248, 0.18);
+  --status-ok: var(--color-success);
+  --status-ok-bg: var(--color-success-bg);
+  --status-warn: var(--color-warning);
+  --status-warn-bg: var(--color-warning-bg);
+  --status-danger: var(--color-danger);
+  --status-danger-bg: var(--color-danger-bg);
+  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --shadow-modal: 0 24px 48px rgba(0, 0, 0, 0.65);
+}
+
+[data-theme="dark"] {
+  --bg-page: #080c14;
+  --bg-card: rgba(15, 23, 42, 0.85);
+  --bg-card-hover: rgba(30, 41, 59, 0.95);
+  --border-card: rgba(255, 255, 255, 0.14);
+  --border-divider: rgba(255, 255, 255, 0.08);
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --accent-primary: #38bdf8;
+  --accent-gradient: linear-gradient(135deg, #38bdf8 0%, #22d3ee 50%, #60a5fa 100%);
+  --shadow-card: 0 20px 48px -6px rgba(0, 0, 0, 0.65), 0 4px 16px -2px rgba(0, 0, 0, 0.4);
+  --tile-bg: rgba(15, 23, 42, 0.88);
+  --tile-border: rgba(255, 255, 255, 0.16);
+  --wp-dim: 0.55;
+  --wp-blur: 8px;
+
+  --color-success: #34d399;
+  --color-success-bg: rgba(52, 211, 153, 0.16);
+  --color-warning: #fbbf24;
+  --color-warning-bg: rgba(251, 191, 36, 0.16);
+  --color-danger: #f87171;
+  --color-danger-bg: rgba(248, 113, 113, 0.16);
+  --color-info: #818cf8;
+  --color-info-bg: rgba(129, 140, 248, 0.16);
+
+  --spd-bg-app: #080c14;
+  --spd-bg-surface: var(--bg-card);
+  --spd-bg-subtle: #1e293b;
+  --spd-bg-muted: #1e293b;
+  --spd-bg-hover: rgba(56, 189, 248, 0.15);
+  --spd-bg-glass: rgba(15, 23, 42, 0.88);
+  --spd-border-subtle: var(--border-divider);
+  --spd-border-base: rgba(51, 65, 85, 0.8);
+  --spd-border-strong: var(--border-card);
+  --spd-text-main: var(--text-primary);
+  --spd-text-regular: var(--text-secondary);
+  --spd-text-muted: var(--text-muted);
+  --spd-primary: var(--accent-primary);
+  --brand-primary: var(--accent-primary);
+  --brand-soft: rgba(56, 189, 248, 0.18);
+  --status-ok: var(--color-success);
+  --status-ok-bg: var(--color-success-bg);
+  --status-warn: var(--color-warning);
+  --status-warn-bg: var(--color-warning-bg);
+  --status-danger: var(--color-danger);
+  --status-danger-bg: var(--color-danger-bg);
+
+  /* Element Plus 深色暗空模式高对比度变量映射 */
+  --el-bg-color: #0b1329;
+  --el-bg-color-overlay: #0f172a;
+  --el-text-color-primary: #f8fafc;
+  --el-text-color-regular: #cbd5e1;
+  --el-text-color-secondary: #94a3b8;
+  --el-border-color: rgba(255, 255, 255, 0.12);
+  --el-border-color-light: rgba(255, 255, 255, 0.08);
+  --el-table-border-color: rgba(255, 255, 255, 0.12);
+  --el-table-header-bg-color: rgba(15, 23, 42, 0.95);
+  --el-table-header-text-color: #f8fafc;
+  --el-table-text-color: #f8fafc;
+  --el-table-tr-bg-color: transparent;
+  --el-table-row-hover-bg-color: rgba(56, 189, 248, 0.14);
+  --el-table-current-row-bg-color: rgba(56, 189, 248, 0.22);
+  --el-fill-color-blank: transparent;
+  --el-fill-color-light: rgba(255, 255, 255, 0.04);
+}
+
+/* =========================================================================
+   2. 极简白瓷模式 Tokens ([data-theme="light"])
+   ========================================================================= */
+[data-theme="light"] {
+  --bg-page: #f1f5f9;
+  --bg-card: rgba(255, 255, 255, 0.90);
+  --bg-card-hover: rgba(255, 255, 255, 0.98);
+  --border-card: rgba(203, 213, 225, 0.9);
+  --border-divider: rgba(226, 232, 240, 0.8);
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --accent-primary: #0284c7;
+  --accent-gradient: linear-gradient(135deg, #0284c7 0%, #06b6d4 50%, #2563eb 100%);
+  --shadow-card: 0 20px 48px -8px rgba(15, 23, 42, 0.12), 0 4px 12px -2px rgba(15, 23, 42, 0.06);
+  --radius-card: 20px;
+  --radius-pill: 9999px;
+  --tile-bg: rgba(255, 255, 255, 0.94);
+  --tile-border: rgba(203, 213, 225, 0.95);
+
+  --wp-dim: 0.35;
+  --wp-blur: 10px;
+
+  /* 状态色彩 Tokens (极简白瓷) */
+  --color-success: #059669;
+  --color-success-bg: rgba(5, 150, 105, 0.12);
+  --color-warning: #d97706;
+  --color-warning-bg: rgba(217, 119, 6, 0.12);
+  --color-danger: #dc2626;
+  --color-danger-bg: rgba(220, 38, 38, 0.12);
+  --color-info: #4f46e5;
+  --color-info-bg: rgba(79, 70, 229, 0.12);
+
+  /* Element Plus 浅色白瓷模式高对比度变量映射 */
+  --el-bg-color: #ffffff;
+  --el-bg-color-overlay: #ffffff;
+  --el-text-color-primary: #0f172a;
+  --el-text-color-regular: #334155;
+  --el-text-color-secondary: #64748b;
+  --el-border-color: #e2e8f0;
+  --el-border-color-light: #f1f5f9;
+  --el-table-border-color: #e2e8f0;
+  --el-table-header-bg-color: #f8fafc;
+  --el-table-header-text-color: #0f172a;
+  --el-table-text-color: #0f172a;
+  --el-table-tr-bg-color: #ffffff;
+  --el-table-row-hover-bg-color: #f0f9ff;
+  --el-table-current-row-bg-color: #e0f2fe;
+  --el-fill-color-blank: #ffffff;
+  --el-fill-color-light: #f8fafc;
+
+  /* 向下兼容存量组件与视图变量契约 (浅色) */
+  --spd-bg-app: var(--bg-page);
+  --spd-bg-surface: var(--bg-card);
+  --spd-bg-subtle: #f8fafc;
+  --spd-bg-muted: #f1f5f9;
+  --spd-bg-hover: #eef2ff;
+  --spd-bg-glass: rgba(255, 255, 255, 0.88);
+
+  --spd-border-subtle: var(--border-divider);
+  --spd-border-base: #cbd5e1;
+  --spd-border-strong: var(--border-card);
+
+  --spd-text-main: var(--text-primary);
+  --spd-text-regular: var(--text-secondary);
+  --spd-text-muted: var(--text-muted);
+  --spd-text-subtle: #94a3b8;
+
+  --spd-primary: var(--accent-primary);
+  --spd-primary-hover: #0369a1;
+  --spd-primary-light: #e0f2fe;
+
+  --spd-success: var(--color-success);
+  --spd-success-light: var(--color-success-bg);
+  --spd-warning: var(--color-warning);
+  --spd-warning-light: var(--color-warning-bg);
+  --spd-danger: var(--color-danger);
+  --spd-danger-light: var(--color-danger-bg);
+  --spd-info: var(--color-info);
+  --spd-info-light: var(--color-info-bg);
+
+  --spd-shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --spd-shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.06);
+  --spd-shadow-md: 0 4px 16px -2px rgba(15, 23, 42, 0.08);
+  --spd-shadow-modal: 0 20px 48px -4px rgba(15, 23, 42, 0.16);
+
+  --bg-app: var(--bg-page);
+  --bg-surface: var(--bg-card);
+  --bg-subtle: #f8fafc;
+  --bg-hover: #eef2ff;
+  --border-base: var(--border-divider);
+  --border-strong: var(--border-card);
+  --text-main: var(--text-primary);
+  --text-regular: var(--text-secondary);
+  --brand-primary: var(--accent-primary);
+  --brand-soft: rgba(2, 132, 199, 0.1);
+  --status-ok: var(--color-success);
+  --status-ok-bg: var(--color-success-bg);
+  --status-warn: var(--color-warning);
+  --status-warn-bg: var(--color-warning-bg);
+  --status-danger: var(--color-danger);
+  --status-danger-bg: var(--color-danger-bg);
+  --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.06);
+  --shadow-modal: 0 20px 45px rgba(15, 23, 42, 0.18);
+}
+
+/* =========================================================================
+   3. 核心微动效 ①：流体笔刷核心入口按钮 (Brush Fluid Stroke Button)
+   ========================================================================= */
+.spd-fluid-btn {
+  --line_color: var(--accent-primary, #0284c7);
+  --back_color: rgba(2, 132, 199, 0.16);
+  position: relative;
+  z-index: 1;
+  width: 250px;
+  height: 54px;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 1.5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: letter-spacing 0.3s ease, transform 0.15s ease;
+  user-select: none;
+  cursor: pointer;
+}
+
+[data-theme="dark"] .spd-fluid-btn,
+:root:not([data-theme="light"]) .spd-fluid-btn {
+  --line_color: #38bdf8;
+  --back_color: rgba(56, 189, 248, 0.22);
+}
+
+.spd-fluid-text {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.spd-fluid-badge {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--line_color);
+  color: #ffffff;
+}
+
+.spd-fluid-btn::before,
+.spd-fluid-btn::after,
+.spd-fluid-text::before,
+.spd-fluid-text::after {
+  content: "";
+  position: absolute;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line_color);
+  transition: all 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.spd-fluid-btn::before {
+  top: 0;
+  left: 54px;
+  width: calc(100% - 54px * 2 - 16px);
+}
+
+.spd-fluid-btn::after {
+  top: 0;
+  right: 54px;
+  width: 8px;
+}
+
+.spd-fluid-text::before {
+  bottom: 0;
+  right: 54px;
+  width: calc(100% - 54px * 2 - 16px);
+}
+
+.spd-fluid-text::after {
+  bottom: 0;
+  left: 54px;
+  width: 8px;
+}
+
+.spd-fluid-line {
+  position: absolute;
+  top: 0;
+  width: 54px;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.spd-fluid-line::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 150%;
+  height: 100%;
+  box-sizing: border-box;
+  border-radius: 300px;
+  border: solid 3px var(--line_color);
+}
+
+.spd-fluid-line:nth-child(1),
+.spd-fluid-line:nth-child(1)::before {
+  left: 0;
+}
+
+.spd-fluid-line:nth-child(2),
+.spd-fluid-line:nth-child(2)::before {
+  right: 0;
+}
+
+.spd-fluid-btn:hover {
+  letter-spacing: 4px;
+  color: var(--line_color);
+}
+
+.spd-fluid-btn:active {
+  transform: scale(0.97);
+}
+
+.spd-fluid-btn:hover::before,
+.spd-fluid-btn:hover .spd-fluid-text::before {
+  width: 8px;
+}
+
+.spd-fluid-btn:hover::after,
+.spd-fluid-btn:hover .spd-fluid-text::after {
+  width: calc(100% - 54px * 2 - 16px);
+}
+
+.spd-fluid-drow1,
+.spd-fluid-drow2 {
+  position: absolute;
+  z-index: -1;
+  border-radius: 16px;
+  transform-origin: 16px 16px;
+  pointer-events: none;
+}
+
+.spd-fluid-drow1 {
+  top: -16px;
+  left: 40px;
+  width: 32px;
+  height: 0;
+  transform: rotate(30deg);
+}
+
+.spd-fluid-drow2 {
+  top: 44px;
+  left: 77px;
+  width: 32px;
+  height: 0;
+  transform: rotate(-127deg);
+}
+
+.spd-fluid-drow1::before,
+.spd-fluid-drow1::after,
+.spd-fluid-drow2::before,
+.spd-fluid-drow2::after {
+  content: "";
+  position: absolute;
+}
+
+.spd-fluid-drow1::before {
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 32px;
+  border-radius: 16px;
+  transform-origin: 16px 16px;
+  transform: rotate(-60deg);
+}
+
+.spd-fluid-drow1::after {
+  top: -10px;
+  left: 45px;
+  width: 0;
+  height: 32px;
+  border-radius: 16px;
+  transform-origin: 16px 16px;
+  transform: rotate(69deg);
+}
+
+.spd-fluid-drow2::before {
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 32px;
+  border-radius: 16px;
+  transform-origin: 16px 16px;
+  transform: rotate(-146deg);
+}
+
+.spd-fluid-drow2::after {
+  bottom: 26px;
+  left: -40px;
+  width: 0;
+  height: 32px;
+  border-radius: 16px;
+  transform-origin: 16px 16px;
+  transform: rotate(-262deg);
+}
+
+.spd-fluid-drow1,
+.spd-fluid-drow1::before,
+.spd-fluid-drow1::after,
+.spd-fluid-drow2,
+.spd-fluid-drow2::before,
+.spd-fluid-drow2::after {
+  background: var(--back_color);
+}
+
+.spd-fluid-btn:hover .spd-fluid-drow1 {
+  animation: spdDrow1 ease-in 0.06s forwards;
+}
+
+.spd-fluid-btn:hover .spd-fluid-drow1::before {
+  animation: spdDrow2 linear 0.08s 0.06s forwards;
+}
+
+.spd-fluid-btn:hover .spd-fluid-drow1::after {
+  animation: spdDrow3 linear 0.03s 0.14s forwards;
+}
+
+.spd-fluid-btn:hover .spd-fluid-drow2 {
+  animation: spdDrow4 linear 0.06s 0.2s forwards;
+}
+
+.spd-fluid-btn:hover .spd-fluid-drow2::before {
+  animation: spdDrow3 linear 0.03s 0.26s forwards;
+}
+
+.spd-fluid-btn:hover .spd-fluid-drow2::after {
+  animation: spdDrow5 linear 0.06s 0.32s forwards;
+}
+
+@keyframes spdDrow1 {
+  0% { height: 0; }
+  100% { height: 100px; }
+}
+
+@keyframes spdDrow2 {
+  0% { width: 0; opacity: 0; }
+  10% { opacity: 0; }
+  11% { opacity: 1; }
+  100% { width: 120px; }
+}
+
+@keyframes spdDrow3 {
+  0% { width: 0; }
+  100% { width: 80px; }
+}
+
+@keyframes spdDrow4 {
+  0% { height: 0; }
+  100% { height: 120px; }
+}
+
+@keyframes spdDrow5 {
+  0% { width: 0; }
+  100% { width: 124px; }
+}
+
+/* =========================================================================
+   4. 核心微动效 ②：双环脉冲微加载指示器 (Dual-ring Pulsing Spinner)
+   ========================================================================= */
+.spd-spinner-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(15, 23, 42, 0.65);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeInPill 200ms ease-out;
+}
+
+.spd-spinner-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 24px 32px;
+  border-radius: 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+}
+
+.spd-spinner-outer-ring {
+  width: 64px;
+  height: 64px;
+  border: 4px solid rgba(56, 189, 248, 0.2);
+  border-top-color: var(--accent-primary, #38bdf8);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: spdSpin 0.9s linear infinite;
+}
+
+.spd-spinner-inner-pulse {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-primary, #38bdf8);
+  animation: spdPulsePing 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.spd-pulse-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.spd-spinner-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.2px;
+}
+
+@keyframes spdSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes spdPulsePing {
+  0% { transform: scale(0.85); opacity: 0.8; }
+  50% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(0.85); opacity: 0.8; }
+}
+
+@keyframes fadeInPill {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* =========================================================================
+   5. 核心微动效 ③：动态底线微交互搜索框 (Animated Underline Search Input)
+   ========================================================================= */
+.spd-search-form {
+  --timing: 0.3s;
+  --width-of-input: 260px;
+  --height-of-input: 38px;
+  --border-height: 2px;
+  --input-bg: var(--bg-card);
+  --border-color: var(--accent-primary, #0284c7);
+  --border-radius: 30px;
+  --after-border-radius: 8px 8px 2px 2px;
+  position: relative;
+  width: var(--width-of-input);
+  height: var(--height-of-input);
+  display: flex;
+  align-items: center;
+  padding-inline: 10px;
+  border-radius: var(--border-radius);
+  border: 1px solid var(--border-card);
+  background: var(--input-bg);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  transition: border-radius 0.35s ease, border-color 0.25s ease;
+}
+
+[data-theme="dark"] .spd-search-form,
+:root:not([data-theme="light"]) .spd-search-form {
+  --border-color: #38bdf8;
+}
+
+.spd-search-form:before {
+  content: "";
+  position: absolute;
+  background: var(--border-color);
+  transform: scaleX(0);
+  transform-origin: center;
+  width: 100%;
+  height: var(--border-height);
+  left: 0;
+  bottom: -1px;
+  border-radius: 1px;
+  transition: transform var(--timing) cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.spd-search-form:focus-within {
+  border-radius: var(--after-border-radius);
+  border-color: rgba(56, 189, 248, 0.45);
+}
+
+.spd-search-form:focus-within:before {
+  transform: scaleX(1);
+}
+
+.spd-search-btn {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  margin-right: 6px;
+}
+
+.spd-search-input {
+  font-size: 13px;
+  color: var(--text-primary);
+  background-color: transparent;
+  width: 100%;
+  height: 100%;
+  border: none;
+  outline: none;
+  font-family: inherit;
+}
+
+.spd-search-input::placeholder {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.spd-search-reset {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, color 0.15s ease;
+}
+
+.spd-search-reset:hover {
+  color: #ef4444;
+}
+
+.spd-search-input:not(:placeholder-shown) ~ .spd-search-reset {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* =========================================================================
+   6. 通用毛玻璃卡片与微边框实用类 (Glassmorphic Cards & Utilities)
+   ========================================================================= */
+.spd-glass-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.spd-glass-card:hover {
+  background: var(--bg-card-hover);
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+.spd-tile {
+  background: var(--tile-bg);
+  border: 1px solid var(--tile-border);
+  border-radius: 12px;
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  transition: all 0.2s ease;
+}
+
+.spd-tile:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-primary);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+/* 角色横幅与业务 KPI 网格 */
+.role-banner {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-base);
+  border-left: 4px solid var(--brand-primary);
+  border-radius: 8px;
+  padding: 12px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-sm);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.kpi-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-base);
+  border-radius: 10px;
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
+  border-color: var(--accent-primary);
+}
+
+.kpi-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.kpi-val {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--brand-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.split-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 16px;
+}
+
+.tree-box {
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-base);
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 13px;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.tree-group {
+  font-weight: 700;
+  margin: 8px 0 6px 0;
+  color: var(--brand-primary);
+  font-size: 12.5px;
+}
+
+.tree-leaf {
+  padding: 7px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-regular);
+  transition: all 0.15s ease;
+}
+
+.tree-leaf:hover,
+.tree-leaf.active {
+  background-color: var(--brand-soft);
+  color: var(--brand-primary);
+  font-weight: 600;
+}
+
+.tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.tag-ok { background-color: var(--status-ok-bg); color: var(--status-ok); }
+.tag-warn { background-color: var(--status-warn-bg); color: var(--status-warn); }
+.tag-danger { background-color: var(--status-danger-bg); color: var(--status-danger); }
+.tag-info { background-color: var(--brand-soft); color: var(--brand-primary); }
+
+.mono {
+  font-family: Consolas, Monaco, ui-monospace, monospace;
+}
+
+/* =========================================================================
+   7. 医慧通行现代医疗模态登录中枢 (Healthcare Modal Auth Card)
+   ========================================================================= */
+.spd-auth-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.70);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeInPill 200ms ease-out;
+}
+
+.spd-auth-card {
+  width: 100%;
+  max-width: 440px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-card);
+  padding: 28px;
+  box-shadow: var(--shadow-card);
+  position: relative;
+  z-index: 2;
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  transition: all 0.25s ease;
+}
+
+.spd-auth-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.spd-auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.spd-auth-brand-logo {
+  width: 28px;
+  height: 28px;
+  color: var(--accent-primary);
+}
+
+.spd-auth-brand-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.spd-auth-brand-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.spd-auth-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border-card);
+  background: transparent;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.spd-auth-close:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.spd-role-fast-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.spd-role-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-card);
+  background: var(--tile-bg);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.18s ease;
+  text-align: left;
+}
+
+.spd-role-btn:hover {
+  border-color: var(--accent-primary);
+  background: var(--bg-card-hover);
+  transform: translateY(-2px);
+}
+
+.spd-role-btn-title {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.spd-role-btn-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* =========================================================================
+   8. 打印专用法定单据媒体查询 (@media print)
+   ========================================================================= */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  .no-print,
+  .el-header,
+  .el-aside,
+  .top-float-nav,
+  .spd-actions-bar,
+  .el-button,
+  .wallpaper-media-layer,
+  .wallpaper-dimmer-layer {
+    display: none !important;
+  }
+  .print-area {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+}
+
+/* =========================================================================
+   9. 纯享壁纸模式 (Zen Mode) 全局视图调度控制规则
+   ========================================================================= */
+body.zen-pure-mode .top-float-nav {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: translateY(-20px) !important;
+}
+
+body.zen-pure-mode .hero-stage-center,
+body.zen-pure-mode #hero-main-stage,
+body.zen-pure-mode .hero-stage-wrapper {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+body.zen-pure-mode .stage-orbital-view,
+body.zen-pure-mode #orbital-container {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+body.zen-pure-mode .stage-tilted-view,
+body.zen-pure-mode #tilted-container {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+body.zen-pure-mode .wallpaper-dimmer-layer {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+body.zen-pure-mode .wallpaper-drawer-panel {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+body.zen-pure-mode .desktop-clock-widget.zen-show {
+  display: block !important;
+  opacity: 0.95;
+  top: 50px;
+}
+
+/* =========================================================================
+   10. 树形自适应侧边栏与医疗单据交互规范 Tokens
+   ========================================================================= */
+
+/* 侧边栏折叠与悬浮状态动效 */
+.fusion-sidebar-container {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  transition: width 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.fusion-sidebar-container.is-unpinned {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 120;
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* 医疗单据列表选中行亮青蓝高亮高对比度 */
+.el-table__body tr.current-row > td.el-table__cell,
+.el-table__body tr.is-selected > td.el-table__cell,
+.fusion-styled-table tr.current-row > td {
+  background-color: rgba(56, 189, 248, 0.22) !important;
+  border-bottom-color: rgba(56, 189, 248, 0.4) !important;
+}
+
+/* 审核状态徽标规范 */
+.badge-unapproved {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #ef4444;
+  border: 1.5px solid #ef4444;
+  background-color: rgba(239, 68, 68, 0.08);
+  letter-spacing: 0.5px;
+}
+
+.badge-approved {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #10b981;
+  border: 1.5px solid #10b981;
+  background-color: rgba(16, 185, 129, 0.08);
+  letter-spacing: 0.5px;
+}
+
+.badge-rejected {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #ec4899;
+  border: 1.5px solid #ec4899;
+  background-color: rgba(236, 72, 153, 0.08);
+  letter-spacing: 0.5px;
+}
+

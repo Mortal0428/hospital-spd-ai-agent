@@ -1,0 +1,3119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:,">
+    <title>医院医疗物资全链路管理系统 - 双模态自适应数字化展厅 (Wallpaper 4K 联动与纯享自由选屏)</title>
+    <style>
+        /* =========================================================================
+           1. 全局设计系统与主题 Tokens (符合 Apple HIG 与 21st.dev 工业级规范)
+           ========================================================================= */
+        :root {
+            --bg-page: #080c14;
+            --bg-card: rgba(15, 23, 42, 0.85);
+            --bg-card-hover: rgba(30, 41, 59, 0.95);
+            --border-card: rgba(255, 255, 255, 0.14);
+            --border-divider: rgba(255, 255, 255, 0.08);
+            --text-primary: #f8fafc;
+            --text-secondary: #cbd5e1;
+            --text-muted: #94a3b8;
+            --accent-primary: #38bdf8;
+            --accent-gradient: linear-gradient(135deg, #38bdf8 0%, #22d3ee 50%, #60a5fa 100%);
+            --shadow-card: 0 20px 48px -6px rgba(0, 0, 0, 0.65), 0 4px 16px -2px rgba(0, 0, 0, 0.4);
+            --radius-card: 20px;
+            --radius-pill: 9999px;
+            --tile-bg: rgba(15, 23, 42, 0.88);
+            --tile-border: rgba(255, 255, 255, 0.16);
+
+            /* 壁纸调光与模糊变量 */
+            --wp-dim: 0.55;
+            --wp-blur: 8px;
+            --orbit-size: 1040px;
+            --orbit-radius: 520px;
+            --orbit-duration: 38s;
+        }
+
+        [data-theme="light"] {
+            --bg-page: #f1f5f9;
+            --bg-card: rgba(255, 255, 255, 0.90);
+            --bg-card-hover: rgba(255, 255, 255, 0.98);
+            --border-card: rgba(203, 213, 225, 0.9);
+            --border-divider: rgba(226, 232, 240, 0.8);
+            --text-primary: #0f172a;
+            --text-secondary: #334155;
+            --text-muted: #64748b;
+            --accent-primary: #0284c7;
+            --accent-gradient: linear-gradient(135deg, #0284c7 0%, #06b6d4 50%, #2563eb 100%);
+            --shadow-card: 0 20px 48px -8px rgba(15, 23, 42, 0.12), 0 4px 12px -2px rgba(15, 23, 42, 0.06);
+            --tile-bg: rgba(255, 255, 255, 0.94);
+            --tile-border: rgba(203, 213, 225, 0.95);
+            --wp-dim: 0.35;
+            --wp-blur: 10px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", sans-serif;
+            background: var(--bg-page);
+            color: var(--text-primary);
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            user-select: none;
+            -webkit-user-select: none;
+            transition: color 250ms ease-out;
+        }
+
+        /* 纯矢量 SVG 图标公共类 (严禁 Emoji) */
+        .svg-icon {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            stroke-width: 1.8;
+            stroke: currentColor;
+            fill: none;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            vertical-align: middle;
+            flex-shrink: 0;
+        }
+
+        /* =========================================================================
+           2. 物理分层架构：Layer 0 (壁纸底层 100% 满屏 Cover) 与 Layer 1 (极轻量调光层)
+           ========================================================================= */
+        .wallpaper-media-layer {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            overflow: hidden;
+            background-color: #080c14;
+            transition: background-image 350ms ease-out;
+            /* 默认 100% 满屏铺满，彻底消除黑边，不受窗口扩大缩小影响 */
+            background-size: cover;
+            background-position: center center;
+            background-repeat: no-repeat;
+            transform: translateZ(0);
+            will-change: transform;
+            backface-visibility: hidden;
+        }
+
+        .wallpaper-video-bg {
+            position: absolute;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            /* 强制 100% 满屏无黑边，与 Wallpaper Engine 桌面满铺完全一致 */
+            object-fit: cover !important;
+            object-position: center center !important;
+            opacity: 0;
+            transition: opacity 350ms ease-out;
+            transform: translateZ(0);
+            will-change: transform;
+        }
+
+        .wallpaper-video-bg.active {
+            opacity: 1;
+        }
+
+        /* 
+           彻底移除昂贵的高斯模糊 backdrop-filter: blur(8px)
+           采用极轻量纯色 Alpha 柔和调光，GPU 负荷暴降 90% 以上，实现丝滑 60FPS
+        */
+        .wallpaper-dimmer-layer {
+            position: fixed;
+            inset: 0;
+            z-index: 1;
+            pointer-events: none;
+            background: rgba(8, 12, 20, 0.45);
+            transition: background 300ms ease-out, opacity 300ms ease-out;
+        }
+
+        /* 纯享模式下彻底隐藏调光遮罩，100% 原始色彩与纯净通透呈现 */
+        body.zen-pure-mode .wallpaper-dimmer-layer {
+            display: none !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+            background: transparent !important;
+        }
+
+        /* =========================================================================
+           3. 顶部通透悬浮导航栏与双模态切换胶囊
+           ========================================================================= */
+        .top-float-nav {
+            position: fixed;
+            top: 20px;
+            left: 28px;
+            right: 28px;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            pointer-events: none;
+            transition: opacity 300ms ease-out, transform 300ms ease-out;
+        }
+
+        body.zen-pure-mode .top-float-nav {
+            opacity: 0;
+            transform: translateY(-20px);
+            pointer-events: none;
+        }
+
+        .brand-badge {
+            pointer-events: auto;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--bg-card);
+            -webkit-backdrop-filter: blur(16px);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-card);
+            border-radius: var(--radius-pill);
+            padding: 8px 16px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        }
+
+        .brand-logo {
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            background: linear-gradient(135deg, #0284c7, #0ea5e9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+        }
+
+        .brand-title {
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: -0.2px;
+            color: var(--text-primary);
+        }
+
+        /* 双模态书签切换胶囊 (Segmented View Switcher) */
+        .mode-segmented-pill {
+            pointer-events: auto;
+            display: inline-flex;
+            align-items: center;
+            background: var(--bg-card);
+            -webkit-backdrop-filter: blur(20px);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-card);
+            border-radius: var(--radius-pill);
+            padding: 4px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+            gap: 4px;
+        }
+
+        .segment-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: var(--radius-pill);
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            transition: background 160ms ease-out, color 160ms ease-out, transform 120ms ease-out;
+        }
+
+        .segment-btn:hover {
+            color: var(--text-primary);
+        }
+
+        .segment-btn.active {
+            background: var(--accent-primary);
+            color: #ffffff;
+            box-shadow: 0 2px 10px rgba(2, 132, 199, 0.4);
+        }
+
+        .segment-btn:active {
+            transform: scale(0.96);
+        }
+
+        .nav-actions {
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .nav-action-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--bg-card);
+            -webkit-backdrop-filter: blur(16px);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-card);
+            color: var(--text-primary);
+            padding: 8px 16px;
+            border-radius: var(--radius-pill);
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: transform 150ms ease-out, background 150ms ease-out;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            cursor: pointer;
+        }
+
+        .nav-action-pill:active {
+            transform: scale(0.96);
+        }
+
+        .btn-theme {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: var(--bg-card);
+            -webkit-backdrop-filter: blur(16px);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-card);
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 150ms ease-out;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn-theme:active {
+            transform: scale(0.92);
+        }
+
+        /* 纯享模式右上角浮动控制微条与胶囊 (含音乐开关与退出按钮) */
+        .zen-control-bar {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            gap: 10px;
+            animation: fadeInPill 300ms ease-out;
+        }
+
+        body.zen-pure-mode .zen-control-bar {
+            display: inline-flex;
+        }
+
+        .zen-mini-pill,
+        .zen-exit-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: var(--radius-pill);
+            background: rgba(15, 23, 42, 0.75);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #f1f5f9;
+            font-size: 13px;
+            font-weight: 500;
+            -webkit-backdrop-filter: blur(16px);
+            backdrop-filter: blur(16px);
+            cursor: pointer;
+            transition: all 200ms ease-out;
+            user-select: none;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        .zen-mini-pill:hover,
+        .zen-exit-pill:hover {
+            background: rgba(30, 41, 59, 0.90);
+            border-color: rgba(56, 189, 248, 0.5);
+            color: #38bdf8;
+            box-shadow: 0 4px 20px rgba(56, 189, 248, 0.25);
+        }
+
+        .zen-mini-pill:active,
+        .zen-exit-pill:active {
+            transform: scale(0.96);
+        }
+
+        .nav-audio-group {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .audio-slider-popover {
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            padding: 8px 12px;
+            background: rgba(15, 23, 42, 0.92);
+            border: 1px solid rgba(56, 189, 248, 0.25);
+            border-radius: 12px;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+            display: none;
+            align-items: center;
+            gap: 8px;
+            z-index: 100;
+        }
+
+        .nav-audio-group:hover .audio-slider-popover {
+            display: flex;
+        }
+
+        #audio-volume-slider {
+            width: 80px;
+            height: 4px;
+            cursor: pointer;
+            accent-color: #38bdf8;
+        }
+
+        .nav-action-pill.active-audio {
+            background: rgba(56, 189, 248, 0.20);
+            border-color: rgba(56, 189, 248, 0.55);
+            color: #38bdf8;
+        }
+
+        @keyframes fadeInPill {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 全屏文件拖拽即映入提示遮罩 */
+        .drag-drop-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 300;
+            background: rgba(2, 132, 199, 0.3);
+            -webkit-backdrop-filter: blur(16px);
+            backdrop-filter: blur(16px);
+            border: 3px dashed #38bdf8;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 14px;
+            pointer-events: none;
+        }
+
+        .drag-drop-overlay.active {
+            display: flex;
+        }
+
+        .drag-drop-text {
+            font-size: 20px;
+            font-weight: 800;
+            color: #ffffff;
+            letter-spacing: -0.5px;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+        }
+
+        /* =========================================================================
+           4. 引擎 A：360 度环形轨道系统 (Orbital Gallery Engine)
+           ========================================================================= */
+        .stage-orbital-view {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            pointer-events: none;
+            opacity: 1;
+            transition: opacity 350ms ease-out, transform 350ms ease-out;
+        }
+
+        /* 切换隐藏时彻底 display: none 并冻结动画，杜绝后台 GPU 空转 */
+        .stage-orbital-view.hidden-mode {
+            display: none !important;
+            opacity: 0 !important;
+            transform: scale(0.92);
+            pointer-events: none !important;
+        }
+
+        .stage-orbital-view.hidden-mode .orbit-carousel-rig,
+        .stage-orbital-view.hidden-mode .satellite-counter-spin {
+            animation-play-state: paused !important;
+        }
+
+        .orbit-track-ring {
+            position: absolute;
+            width: var(--orbit-size);
+            height: var(--orbit-size);
+            border-radius: 50%;
+            border: 1px dashed var(--border-divider);
+            opacity: 0.6;
+        }
+
+        .orbit-carousel-rig {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            animation: rig-orbit var(--orbit-duration) linear infinite;
+            will-change: transform;
+        }
+
+        @keyframes rig-orbit {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .orbit-satellite-slot {
+            position: absolute;
+            width: 0;
+            height: 0;
+        }
+
+        .satellite-counter-spin {
+            position: absolute;
+            top: 0;
+            left: 0;
+            animation: card-counter-spin var(--orbit-duration) linear infinite;
+            will-change: transform;
+        }
+
+        @keyframes card-counter-spin {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(-360deg); }
+        }
+
+        .medical-card-pod {
+            width: 250px;
+            height: 136px;
+            border-radius: var(--radius-card);
+            background: var(--bg-card);
+            -webkit-backdrop-filter: blur(18px) saturate(1.8);
+            backdrop-filter: blur(18px) saturate(1.8);
+            border: 1px solid var(--border-card);
+            box-shadow: var(--shadow-card);
+            padding: 14px 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            overflow: hidden;
+            transition: transform 180ms ease-out, border-color 180ms ease-out;
+            cursor: pointer;
+            pointer-events: auto;
+        }
+
+        .medical-card-pod:hover {
+            transform: scale(1.06);
+            border-color: var(--accent-primary);
+        }
+
+        /* =========================================================================
+           5. 引擎 B：3D 弧面圆柱 16-切片流光系统 (Tilted Grid Engine)
+           ========================================================================= */
+        .stage-tilted-view {
+            position: absolute;
+            inset: 0;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            opacity: 0;
+            transform: scale(1.08);
+            transition: opacity 350ms ease-out, transform 350ms ease-out;
+        }
+
+        .stage-tilted-view.active-mode {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        /* 未激活时彻底 display: none 并冻结所有切片动画 */
+        .stage-tilted-view:not(.active-mode) {
+            display: none !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+        }
+
+        .stage-tilted-view:not(.active-mode) .tgh-tile-stream-master {
+            animation-play-state: paused !important;
+        }
+
+        .tgh-cylinder-band-wrap {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            transform-style: preserve-3d;
+            mask-image: linear-gradient(90deg, transparent 0%, #000 12%, #000 88%, transparent 100%);
+            -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 12%, #000 88%, transparent 100%);
+        }
+
+        .tgh-tile {
+            position: absolute;
+            transform-style: preserve-3d;
+            will-change: transform;
+            pointer-events: auto;
+            cursor: pointer;
+        }
+
+        .tgh-slice {
+            position: absolute;
+            top: 0;
+            overflow: hidden;
+            transform-style: preserve-3d;
+            /* 彻底剥离昂贵的高斯模糊滤镜，改用轻量半透明深蓝科技底色，GPU 复合层负荷暴降 90% */
+            background: rgba(15, 23, 42, 0.88);
+            border-top: 1px solid rgba(56, 189, 248, 0.35);
+            border-bottom: 1px solid rgba(56, 189, 248, 0.35);
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+            transform: translateZ(0);
+            will-change: transform;
+            backface-visibility: hidden;
+        }
+
+        .tgh-slice.slice-first {
+            border-left: 1px solid var(--tile-border);
+            border-top-left-radius: 14px;
+            border-bottom-left-radius: 14px;
+        }
+
+        .tgh-slice.slice-last {
+            border-right: 1px solid var(--tile-border);
+            border-top-right-radius: 14px;
+            border-bottom-right-radius: 14px;
+        }
+
+        .tgh-card-canvas {
+            position: absolute;
+            top: 0;
+            padding: 16px 18px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            overflow: hidden;
+            user-select: none;
+            background: linear-gradient(180deg, rgba(2, 132, 199, 0.08) 0%, transparent 60%);
+        }
+
+        .card-tag {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 2px 7px;
+            border-radius: var(--radius-pill);
+            background: rgba(2, 132, 199, 0.14);
+            color: var(--accent-primary);
+            border: 1px solid rgba(2, 132, 199, 0.25);
+            width: fit-content;
+        }
+
+        .card-headline {
+            font-size: 13px;
+            font-weight: 800;
+            color: var(--text-primary);
+            margin-top: 4px;
+            margin-bottom: 2px;
+            white-space: nowrap;
+        }
+
+        .card-subtext {
+            font-size: 11px;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .pulse-mini-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #10b981;
+            box-shadow: 0 0 8px #10b981;
+        }
+
+        /* =========================================================================
+           6. 中央悬浮恒定主舞台 (Center Stage)
+           ========================================================================= */
+        .hero-stage-center {
+            position: relative;
+            z-index: 50;
+            max-width: 820px;
+            width: 90%;
+            padding: 38px 32px 30px;
+            background: var(--bg-card);
+            -webkit-backdrop-filter: blur(28px) saturate(2);
+            backdrop-filter: blur(28px) saturate(2);
+            border: 1px solid var(--border-card);
+            border-radius: 28px;
+            box-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.15) inset;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            pointer-events: auto;
+            transition: opacity 300ms ease-out, transform 300ms ease-out;
+        }
+
+        body.zen-pure-mode .hero-stage-center {
+            display: none !important;
+            opacity: 0 !important;
+            transform: scale(0.92);
+            pointer-events: none !important;
+        }
+
+        /* =========================================================================
+           全局纯享模式 (Zen Pure Mode) 铁律规范：
+           1. 彻底隐藏所有前景卡片与文字层 (0 模糊残影、0 幽灵卡片、0 遮挡)；
+           2. 彻底暂停后台所有 CSS 动画 (0 冗余 GPU 消耗)；
+           3. 仅保留右上角极简退出微胶囊 (支持按 ESC 或点击任意区域退出)。
+           ========================================================================= */
+        body.zen-pure-mode .stage-orbital-view,
+        body.zen-pure-mode .stage-tilted-view,
+        body.zen-pure-mode .hero-stage-center,
+        body.zen-pure-mode .top-float-nav,
+        body.zen-pure-mode .wallpaper-drawer-panel,
+        body.zen-pure-mode .drag-drop-overlay,
+        body.zen-pure-mode .wallpaper-dimmer-layer {
+            display: none !important;
+            opacity: 0 !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+        }
+
+        body.zen-pure-mode .orbit-carousel-rig,
+        body.zen-pure-mode .satellite-counter-spin,
+        body.zen-pure-mode .tgh-tile-stream-master {
+            animation-play-state: paused !important;
+        }
+
+        .hero-pill-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 14px;
+            border-radius: var(--radius-pill);
+            background: rgba(2, 132, 199, 0.10);
+            border: 1px solid rgba(2, 132, 199, 0.25);
+            color: var(--accent-primary);
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 18px;
+        }
+
+        .badge-live-pulse {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+            box-shadow: 0 0 10px #10b981;
+            animation: pulse-ring 2s infinite;
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.3); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.8; }
+        }
+
+        .hero-h1 {
+            font-size: 38px;
+            font-weight: 800;
+            line-height: 1.16;
+            letter-spacing: -1px;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+        }
+
+        .gradient-span {
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero-summary-p {
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            max-width: 620px;
+            margin: 0 auto 24px;
+        }
+
+        .cta-btn-group {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 28px;
+            flex-wrap: wrap;
+        }
+
+        .btn-cta-main {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 28px;
+            border-radius: var(--radius-pill);
+            background: var(--accent-primary);
+            color: #ffffff;
+            font-size: 14px;
+            font-weight: 700;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 8px 24px rgba(2, 132, 199, 0.35);
+            transition: transform 120ms ease-out, background 150ms ease-out;
+            text-decoration: none;
+        }
+
+        .btn-cta-main:hover {
+            background: #0369a1;
+        }
+
+        .btn-cta-main:active {
+            transform: scale(0.96);
+        }
+
+        .btn-cta-secondary {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 22px;
+            border-radius: var(--radius-pill);
+            background: var(--bg-card);
+            color: var(--text-primary);
+            font-size: 14px;
+            font-weight: 600;
+            border: 1px solid var(--border-card);
+            cursor: pointer;
+            transition: transform 120ms ease-out, background 150ms ease-out;
+            text-decoration: none;
+        }
+
+        .btn-cta-secondary:hover {
+            background: var(--bg-card-hover);
+        }
+
+        .btn-cta-secondary:active {
+            transform: scale(0.96);
+        }
+
+        .legal-metrics-grid {
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            border-top: 1px solid var(--border-divider);
+            padding-top: 20px;
+            gap: 16px;
+        }
+
+        .metric-col {
+            padding: 0 10px;
+            text-align: center;
+        }
+
+        .metric-col:not(:last-child) {
+            border-right: 1px solid var(--border-divider);
+        }
+
+        .metric-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .metric-desc {
+            font-size: 11px;
+            color: var(--text-muted);
+            line-height: 1.45;
+        }
+
+        /* =========================================================================
+           7. 升级版壁纸工坊底部抽屉面板 (全量 39 款 + 自由选择器 + 类别过滤)
+           ========================================================================= */
+        .wallpaper-drawer-panel {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(120%);
+            z-index: 150;
+            background: var(--bg-card);
+            -webkit-backdrop-filter: blur(28px) saturate(2);
+            backdrop-filter: blur(28px) saturate(2);
+            border: 1px solid var(--border-card);
+            border-radius: 24px;
+            padding: 20px 24px;
+            box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+            max-width: 1000px;
+            width: 94%;
+            max-height: 440px;
+            display: flex;
+            flex-direction: column;
+            transition: transform 350ms cubic-bezier(0.16, 1, 0.3, 1);
+            pointer-events: auto;
+        }
+
+        .wallpaper-drawer-panel.open {
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .drawer-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            flex-shrink: 0;
+        }
+
+        .drawer-title-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        /* 顶部操作工具条：分类选项与自由选择本地文件 */
+        .drawer-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            gap: 12px;
+            flex-wrap: wrap;
+            flex-shrink: 0;
+        }
+
+        .filter-tabs {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .filter-btn {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: var(--radius-pill);
+            border: 1px solid var(--border-card);
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: background 150ms ease-out, color 150ms ease-out;
+        }
+
+        .filter-btn.active {
+            background: var(--accent-primary);
+            color: #ffffff;
+            border-color: var(--accent-primary);
+        }
+
+        .drawer-custom-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-custom-picker {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 5px 12px;
+            border-radius: var(--radius-pill);
+            background: rgba(2, 132, 199, 0.14);
+            border: 1px solid rgba(2, 132, 199, 0.3);
+            color: var(--accent-primary);
+            cursor: pointer;
+            transition: background 150ms ease-out;
+        }
+
+        .btn-custom-picker:hover {
+            background: rgba(2, 132, 199, 0.25);
+        }
+
+        /* 壁纸滚动画廊 */
+        .wallpaper-scroll-container {
+            overflow-y: auto;
+            flex-grow: 1;
+            padding-right: 4px;
+        }
+
+        .wallpaper-scroll-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .wallpaper-scroll-container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+
+        .wallpaper-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 10px;
+        }
+
+        @media (max-width: 1200px) {
+            .wallpaper-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+
+        .wallpaper-thumb-card {
+            border-radius: 12px;
+            border: 2px solid transparent;
+            overflow: hidden;
+            cursor: pointer;
+            transition: transform 150ms ease-out, border-color 150ms ease-out;
+            position: relative;
+            aspect-ratio: 16 / 9;
+            background: #1e293b;
+        }
+
+        .wallpaper-thumb-card:hover {
+            transform: scale(1.05);
+            border-color: var(--accent-primary);
+        }
+
+        .wallpaper-thumb-card.active {
+            border-color: #38bdf8;
+            box-shadow: 0 0 16px rgba(56, 189, 248, 0.5);
+        }
+
+        .wallpaper-thumb-card img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .wallpaper-thumb-title {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 4px 6px;
+            font-size: 10px;
+            font-weight: 600;
+            background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.85));
+            color: #ffffff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .wallpaper-type-badge {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            font-size: 8px;
+            font-weight: 700;
+            padding: 1px 4px;
+            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #38bdf8;
+        }
+
+        .badge-4k {
+            color: #38bdf8;
+            border: 1px solid rgba(56, 189, 248, 0.4);
+        }
+
+        .badge-scene {
+            color: #10b981;
+        }
+
+        .badge-thumb {
+            color: #f59e0b;
+        }
+
+        /* 桌面极简数字时钟小部件 (Layer 0.8: 精确同步本地时间) */
+        .desktop-clock-widget {
+            position: fixed;
+            top: 76px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 5;
+            text-align: center;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 400ms ease-out, transform 400ms ease-out;
+            user-select: none;
+        }
+
+        .desktop-clock-widget.active {
+            opacity: 1;
+        }
+
+        .clock-time {
+            font-size: 54px;
+            font-weight: 200;
+            letter-spacing: -2px;
+            color: #ffffff;
+            text-shadow: 0 4px 20px rgba(0, 0, 0, 0.7);
+            font-variant-numeric: tabular-nums;
+            line-height: 1;
+            margin-bottom: 4px;
+        }
+
+        .clock-date {
+            font-size: 13px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.85);
+            letter-spacing: 0.5px;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+        }
+
+        /* 纯享模式下时钟按用户意愿支持独立展示 */
+        body.zen-pure-mode .desktop-clock-widget {
+            display: none;
+        }
+
+        body.zen-pure-mode .desktop-clock-widget.zen-show {
+            display: block !important;
+            opacity: 0.95;
+            top: 50px;
+        }
+
+        /* 隐藏的原生文件与文件夹选择器 */
+        #local-file-picker, #local-folder-picker {
+            display: none;
+        }
+
+        /* =========================================================================
+           11. 核心微动效 ①：流体流动笔刷核心入口按钮 (Brush Fluid Stroke Button)
+           ========================================================================= */
+        .spd-fluid-btn {
+            --line_color: var(--accent-primary, #0284c7);
+            --back_color: rgba(2, 132, 199, 0.16);
+            position: relative;
+            z-index: 1;
+            width: 250px;
+            height: 54px;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: 1.5px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: letter-spacing 0.3s ease, transform 0.15s ease;
+            user-select: none;
+        }
+
+        [data-theme="dark"] .spd-fluid-btn {
+            --line_color: #38bdf8;
+            --back_color: rgba(56, 189, 248, 0.22);
+        }
+
+        .spd-fluid-text {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .spd-fluid-badge {
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            padding: 2px 6px;
+            border-radius: var(--radius-pill);
+            background: var(--line_color);
+            color: #ffffff;
+        }
+
+        .spd-fluid-btn::before,
+        .spd-fluid-btn::after,
+        .spd-fluid-text::before,
+        .spd-fluid-text::after {
+            content: "";
+            position: absolute;
+            height: 3px;
+            border-radius: 2px;
+            background: var(--line_color);
+            transition: all 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .spd-fluid-btn::before {
+            top: 0;
+            left: 54px;
+            width: calc(100% - 54px * 2 - 16px);
+        }
+
+        .spd-fluid-btn::after {
+            top: 0;
+            right: 54px;
+            width: 8px;
+        }
+
+        .spd-fluid-text::before {
+            bottom: 0;
+            right: 54px;
+            width: calc(100% - 54px * 2 - 16px);
+        }
+
+        .spd-fluid-text::after {
+            bottom: 0;
+            left: 54px;
+            width: 8px;
+        }
+
+        .spd-fluid-line {
+            position: absolute;
+            top: 0;
+            width: 54px;
+            height: 100%;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .spd-fluid-line::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            width: 150%;
+            height: 100%;
+            box-sizing: border-box;
+            border-radius: 300px;
+            border: solid 3px var(--line_color);
+        }
+
+        .spd-fluid-line:nth-child(1),
+        .spd-fluid-line:nth-child(1)::before {
+            left: 0;
+        }
+
+        .spd-fluid-line:nth-child(2),
+        .spd-fluid-line:nth-child(2)::before {
+            right: 0;
+        }
+
+        .spd-fluid-btn:hover {
+            letter-spacing: 4px;
+            color: var(--line_color);
+        }
+
+        .spd-fluid-btn:active {
+            transform: scale(0.97);
+        }
+
+        .spd-fluid-btn:hover::before,
+        .spd-fluid-btn:hover .spd-fluid-text::before {
+            width: 8px;
+        }
+
+        .spd-fluid-btn:hover::after,
+        .spd-fluid-btn:hover .spd-fluid-text::after {
+            width: calc(100% - 54px * 2 - 16px);
+        }
+
+        .spd-fluid-drow1,
+        .spd-fluid-drow2 {
+            position: absolute;
+            z-index: -1;
+            border-radius: 16px;
+            transform-origin: 16px 16px;
+            pointer-events: none;
+        }
+
+        .spd-fluid-drow1 {
+            top: -16px;
+            left: 40px;
+            width: 32px;
+            height: 0;
+            transform: rotate(30deg);
+        }
+
+        .spd-fluid-drow2 {
+            top: 44px;
+            left: 77px;
+            width: 32px;
+            height: 0;
+            transform: rotate(-127deg);
+        }
+
+        .spd-fluid-drow1::before,
+        .spd-fluid-drow1::after,
+        .spd-fluid-drow2::before,
+        .spd-fluid-drow2::after {
+            content: "";
+            position: absolute;
+        }
+
+        .spd-fluid-drow1::before {
+            bottom: 0;
+            left: 0;
+            width: 0;
+            height: 32px;
+            border-radius: 16px;
+            transform-origin: 16px 16px;
+            transform: rotate(-60deg);
+        }
+
+        .spd-fluid-drow1::after {
+            top: -10px;
+            left: 45px;
+            width: 0;
+            height: 32px;
+            border-radius: 16px;
+            transform-origin: 16px 16px;
+            transform: rotate(69deg);
+        }
+
+        .spd-fluid-drow2::before {
+            bottom: 0;
+            left: 0;
+            width: 0;
+            height: 32px;
+            border-radius: 16px;
+            transform-origin: 16px 16px;
+            transform: rotate(-146deg);
+        }
+
+        .spd-fluid-drow2::after {
+            bottom: 26px;
+            left: -40px;
+            width: 0;
+            height: 32px;
+            border-radius: 16px;
+            transform-origin: 16px 16px;
+            transform: rotate(-262deg);
+        }
+
+        .spd-fluid-drow1,
+        .spd-fluid-drow1::before,
+        .spd-fluid-drow1::after,
+        .spd-fluid-drow2,
+        .spd-fluid-drow2::before,
+        .spd-fluid-drow2::after {
+            background: var(--back_color);
+        }
+
+        .spd-fluid-btn:hover .spd-fluid-drow1 {
+            animation: spdDrow1 ease-in 0.06s forwards;
+        }
+
+        .spd-fluid-btn:hover .spd-fluid-drow1::before {
+            animation: spdDrow2 linear 0.08s 0.06s forwards;
+        }
+
+        .spd-fluid-btn:hover .spd-fluid-drow1::after {
+            animation: spdDrow3 linear 0.03s 0.14s forwards;
+        }
+
+        .spd-fluid-btn:hover .spd-fluid-drow2 {
+            animation: spdDrow4 linear 0.06s 0.2s forwards;
+        }
+
+        .spd-fluid-btn:hover .spd-fluid-drow2::before {
+            animation: spdDrow3 linear 0.03s 0.26s forwards;
+        }
+
+        .spd-fluid-btn:hover .spd-fluid-drow2::after {
+            animation: spdDrow5 linear 0.06s 0.32s forwards;
+        }
+
+        @keyframes spdDrow1 {
+            0% { height: 0; }
+            100% { height: 100px; }
+        }
+        @keyframes spdDrow2 {
+            0% { width: 0; opacity: 0; }
+            10% { opacity: 0; }
+            11% { opacity: 1; }
+            100% { width: 120px; }
+        }
+        @keyframes spdDrow3 {
+            0% { width: 0; }
+            100% { width: 80px; }
+        }
+        @keyframes spdDrow4 {
+            0% { height: 0; }
+            100% { height: 120px; }
+        }
+        @keyframes spdDrow5 {
+            0% { width: 0; }
+            100% { width: 124px; }
+        }
+
+        /* =========================================================================
+           12. 核心微动效 ②：双环脉冲微加载指示器 (Dual-ring Pulsing Spinner)
+           ========================================================================= */
+        .spd-spinner-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 2000;
+            background: rgba(15, 23, 42, 0.65);
+            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeInPill 200ms ease-out;
+        }
+
+        .spd-spinner-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            padding: 24px 32px;
+            border-radius: 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .spd-spinner-outer-ring {
+            width: 64px;
+            height: 64px;
+            border: 4px solid rgba(56, 189, 248, 0.2);
+            border-top-color: #38bdf8;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: spdSpin 0.9s linear infinite;
+        }
+
+        .spd-spinner-inner-pulse {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #38bdf8;
+            animation: spdPulsePing 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+        }
+
+        .spd-pulse-icon {
+            width: 22px;
+            height: 22px;
+        }
+
+        .spd-spinner-text {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            letter-spacing: 0.2px;
+        }
+
+        @keyframes spdSpin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes spdPulsePing {
+            0% { transform: scale(0.85); opacity: 0.8; }
+            50% { transform: scale(1.15); opacity: 1; }
+            100% { transform: scale(0.85); opacity: 0.8; }
+        }
+
+        /* =========================================================================
+           13. 核心微动效 ③：动态底线微交互搜索框 (Animated Underline Search Input)
+           ========================================================================= */
+        .spd-search-form {
+            --timing: 0.3s;
+            --width-of-input: 260px;
+            --height-of-input: 38px;
+            --border-height: 2px;
+            --input-bg: var(--bg-card);
+            --border-color: var(--accent-primary, #0284c7);
+            --border-radius: 30px;
+            --after-border-radius: 8px 8px 2px 2px;
+            position: relative;
+            width: var(--width-of-input);
+            height: var(--height-of-input);
+            display: flex;
+            align-items: center;
+            padding-inline: 10px;
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-card);
+            background: var(--input-bg);
+            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+            transition: border-radius 0.35s ease, border-color 0.25s ease;
+        }
+
+        [data-theme="dark"] .spd-search-form {
+            --border-color: #38bdf8;
+        }
+
+        .spd-search-form:before {
+            content: "";
+            position: absolute;
+            background: var(--border-color);
+            transform: scaleX(0);
+            transform-origin: center;
+            width: 100%;
+            height: var(--border-height);
+            left: 0;
+            bottom: -1px;
+            border-radius: 1px;
+            transition: transform var(--timing) cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .spd-search-form:focus-within {
+            border-radius: var(--after-border-radius);
+            border-color: rgba(56, 189, 248, 0.45);
+        }
+
+        .spd-search-form:focus-within:before {
+            transform: scaleX(1);
+        }
+
+        .spd-search-btn {
+            border: none;
+            background: none;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            padding: 0;
+            margin-right: 6px;
+        }
+
+        .spd-search-input {
+            font-size: 13px;
+            color: var(--text-primary);
+            background-color: transparent;
+            width: 100%;
+            height: 100%;
+            border: none;
+            outline: none;
+            font-family: inherit;
+        }
+
+        .spd-search-input::placeholder {
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
+        .spd-search-reset {
+            border: none;
+            background: none;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            padding: 0;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s ease, color 0.15s ease;
+        }
+
+        .spd-search-reset:hover {
+            color: #ef4444;
+        }
+
+        .spd-search-input:not(:placeholder-shown) ~ .spd-search-reset {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* =========================================================================
+           14. 核心微交互 ④：现代医疗卡片风格登录认证中枢 (Healthcare Modal Auth Card)
+           ========================================================================= */
+        .spd-auth-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 1500;
+            background: rgba(15, 23, 42, 0.70);
+            -webkit-backdrop-filter: blur(20px);
+            backdrop-filter: blur(20px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeInPill 250ms ease-out;
+        }
+
+        .spd-auth-card {
+            width: 440px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: 20px;
+            padding: 28px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            -webkit-backdrop-filter: blur(24px);
+            backdrop-filter: blur(24px);
+        }
+
+        .spd-auth-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-card);
+        }
+
+        .spd-auth-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .spd-auth-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: -0.2px;
+        }
+
+        .spd-auth-sub {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 1px;
+        }
+
+        .spd-auth-close {
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s ease, color 0.15s ease;
+        }
+
+        .spd-auth-close:hover {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+        }
+
+        .spd-auth-form {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .spd-auth-field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .spd-auth-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .spd-auth-input-wrap {
+            border: 1.5px solid var(--border-card);
+            border-radius: 10px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            background: rgba(15, 23, 42, 0.35);
+            transition: border-color 0.2s ease;
+        }
+
+        [data-theme="light"] .spd-auth-input-wrap {
+            background: #f8fafc;
+        }
+
+        .spd-auth-input-wrap:focus-within {
+            border-color: #38bdf8;
+        }
+
+        .spd-input-icon {
+            width: 18px;
+            height: 18px;
+            color: var(--text-muted);
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
+
+        .spd-auth-input {
+            border: none;
+            background: transparent;
+            outline: none;
+            width: 100%;
+            height: 100%;
+            color: var(--text-primary);
+            font-size: 13px;
+            font-family: inherit;
+        }
+
+        .spd-auth-input::placeholder {
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
+        .spd-pwd-toggle {
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+        }
+
+        .spd-pwd-toggle:hover {
+            color: var(--text-primary);
+        }
+
+        .spd-auth-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 12px;
+        }
+
+        .spd-checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-muted);
+            cursor: pointer;
+        }
+
+        .spd-checkbox-label input {
+            accent-color: #38bdf8;
+            cursor: pointer;
+        }
+
+        .spd-auth-link {
+            color: #38bdf8;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .spd-auth-link:hover {
+            text-decoration: underline;
+        }
+
+        .spd-auth-submit {
+            height: 46px;
+            background: var(--accent-primary, #0284c7);
+            color: #ffffff;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 4px;
+            transition: background 0.2s ease, transform 0.15s ease;
+            box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4);
+        }
+
+        .spd-auth-submit:hover {
+            filter: brightness(1.1);
+        }
+
+        .spd-auth-submit:active {
+            transform: scale(0.98);
+        }
+
+        .spd-auth-divider {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 4px 0;
+            font-size: 11px;
+            color: var(--text-muted);
+            position: relative;
+        }
+
+        .spd-auth-divider::before,
+        .spd-auth-divider::after {
+            content: "";
+            flex: 1;
+            height: 1px;
+            background: var(--border-card);
+        }
+
+        .spd-auth-divider span {
+            padding: 0 10px;
+        }
+
+        .spd-role-fast-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+
+        .spd-role-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            height: 64px;
+            border-radius: 10px;
+            border: 1px solid var(--border-card);
+            background: rgba(15, 23, 42, 0.4);
+            color: var(--text-primary);
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
+        }
+
+        [data-theme="light"] .spd-role-btn {
+            background: #f8fafc;
+        }
+
+        .spd-role-btn:hover {
+            border-color: #38bdf8;
+            background: rgba(56, 189, 248, 0.15);
+            color: #38bdf8;
+            transform: translateY(-2px);
+        }
+
+        .spd-role-btn:active {
+            transform: scale(0.96);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Layer 0: 本地 Wallpaper Engine 媒体底层 (支持 4K MP4、超高清原画与原生音轨) -->
+    <div class="wallpaper-media-layer" id="wallpaper-media-layer">
+        <video class="wallpaper-video-bg active" id="wallpaper-video" autoplay loop muted playsinline src="file:///E:/SteamLibrary/steamapps/workshop/content/431960/2580793783/RaidenShogun.mp4"></video>
+        <audio id="wallpaper-audio" loop playsinline style="display:none;"></audio>
+    </div>
+
+    <!-- Layer 0.8: 桌面实时数字时钟小部件 (精确同步本地时间、支持自由开关) -->
+    <div class="desktop-clock-widget" id="desktop-clock-widget">
+        <div class="clock-time" id="clock-time">00:00</div>
+        <div class="clock-date" id="clock-date">2026年11月2日 星期一</div>
+    </div>
+
+    <!-- Layer 1: 轻量无损调光层 -->
+    <div class="wallpaper-dimmer-layer" id="wallpaper-dimmer"></div>
+
+    <!-- 全屏拖拽文件提示遮罩 -->
+    <div class="drag-drop-overlay" id="drag-drop-overlay">
+        <svg class="svg-icon" style="width:48px; height:48px; color:#ffffff;" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>
+        <div class="drag-drop-text">松开鼠标即可将媒体映入全屏壁纸 (支持 MP4 视频与各类超清图片)</div>
+    </div>
+
+    <!-- 顶部通透悬浮导航栏 -->
+    <nav class="top-float-nav" id="top-nav">
+        <div class="brand-badge">
+            <div class="brand-logo">
+                <svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 2v20M2 12h20M7 7l10 10M17 7L7 17"></path></svg>
+            </div>
+            <div class="brand-title">医院医疗物资全链路管理系统 · 统一双模态展厅</div>
+        </div>
+
+        <!-- 居中双模态书签切换胶囊 (360° 轨道 vs 3D 弧面流光) -->
+        <div class="mode-segmented-pill" id="mode-segmented-pill">
+            <button class="segment-btn active" id="btn-mode-orbital" data-mode="orbital">
+                <svg class="svg-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 3a9 9 0 0 1 9 9M3 12a9 9 0 0 1 9-9"></path></svg>
+                <span>360° 全域轨道拓扑</span>
+            </button>
+            <button class="segment-btn" id="btn-mode-tilted" data-mode="tilted">
+                <svg class="svg-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M3 9h18M3 15h18M9 3v18M15 3v18"></path></svg>
+                <span>3D 弧面全链流光</span>
+            </button>
+        </div>
+
+        <div class="nav-actions">
+            <!-- 音乐/音效自由开关与音量微调节 (快捷键 M) -->
+            <div class="nav-audio-group" id="nav-audio-group">
+                <button class="nav-action-pill" id="btn-toggle-audio" title="开启/静音动态壁纸背景音乐 (快捷键 M)">
+                    <span id="audio-icon-slot">
+                        <svg class="svg-icon" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
+                    </span>
+                    <span id="audio-label-text">静音</span>
+                </button>
+                <div class="audio-slider-popover" id="audio-slider-popover">
+                    <input type="range" id="audio-volume-slider" min="0" max="1" step="0.05" value="0.65" title="音量调节">
+                </div>
+            </div>
+
+            <!-- 壁纸工坊抽屉开关 -->
+            <button class="nav-action-pill" id="btn-toggle-wallpaper">
+                <svg class="svg-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                <span id="label-wp-btn">壁纸工坊 (39)</span>
+            </button>
+
+            <!-- 纯享模式开关 -->
+            <button class="nav-action-pill" id="btn-enter-zen">
+                <svg class="svg-icon" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                <span>纯享模式</span>
+            </button>
+
+            <!-- 医慧通行登录认证入口 -->
+            <button class="nav-action-pill" id="btn-open-login" title="医慧通行安全认证与角色切换">
+                <svg class="svg-icon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                <span>医慧通行</span>
+            </button>
+
+            <!-- 返回生产级工作台选型器 -->
+            <a href="spd_frontend_design_variants.html" class="nav-action-pill" id="btn-back-variants">
+                <svg class="svg-icon" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>
+                <span>工作台原型</span>
+            </a>
+
+            <!-- 亮暗主题切换 -->
+            <button class="btn-theme" id="theme-toggle-btn" aria-label="切换亮暗主题">
+                <svg class="svg-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+            </button>
+        </div>
+    </nav>
+
+    <!-- 纯享模式右上角浮动控制微条 (含音乐开关与退出按钮) -->
+    <div class="zen-control-bar" id="zen-control-bar">
+        <button class="zen-mini-pill" id="btn-zen-toggle-audio" title="纯享音乐开关 (快捷键 M)">
+            <span id="zen-audio-icon-slot">
+                <svg class="svg-icon" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
+            </span>
+            <span id="zen-audio-label">静音</span>
+        </button>
+        <div class="zen-exit-pill" id="btn-exit-zen">
+            <svg class="svg-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            <span>退出纯享 (ESC)</span>
+        </div>
+    </div>
+
+    <!-- =====================================================================
+         引擎 A 视图容器：360 度环形轨道卫星拓扑 (Orbital Hero)
+         ===================================================================== -->
+    <div class="stage-orbital-view" id="orbital-container">
+        <div class="orbit-track-ring"></div>
+        <div class="orbit-carousel-rig" id="orbit-rig">
+            <!-- JS 极坐标动态注入 10 大卡片 -->
+        </div>
+    </div>
+
+    <!-- =====================================================================
+         引擎 B 视图容器：3D 弧面圆柱 16-切片流光系统 (Tilted Grid Hero)
+         ===================================================================== -->
+    <div class="stage-tilted-view" id="tilted-container">
+        <div class="tgh-cylinder-band-wrap" id="tgh-band">
+            <!-- JS 切片算法动态注入瓦片与微切片 -->
+        </div>
+    </div>
+
+    <!-- =====================================================================
+         中央恒定悬浮主舞台 (Center Stage)
+         ===================================================================== -->
+    <main class="hero-stage-center" id="hero-main-stage">
+        <!-- 状态微徽标 -->
+        <div class="hero-pill-badge">
+            <span class="badge-live-pulse"></span>
+            <span id="center-badge-text">医疗物资全链路 SPD · 双模态自适应数字化展厅 v2.0</span>
+        </div>
+
+        <!-- 主标题 -->
+        <h1 class="hero-h1">
+            智慧医疗 物资全链<br>
+            <span class="gradient-span">全生命周期物权穿透与智能协同</span>
+        </h1>
+
+        <!-- 副标题描述 -->
+        <p class="hero-summary-p">
+            支持 360° 环形拓扑与 3D 弧面时间流双模态切换，直连本地 Wallpaper Engine 431960 全量 39 款创意工坊，支持 4K 原生动态视频无损播放与一键纯享。
+        </p>
+
+        <!-- CTA 核心按钮 -->
+        <div class="cta-btn-group">
+            <a href="spd_frontend_design_variants.html" class="spd-fluid-btn" id="btn-enter-workbench">
+                <div class="spd-fluid-line"></div>
+                <div class="spd-fluid-line"></div>
+                <span class="spd-fluid-text">
+                    <svg class="svg-icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                    <span>进入三级角色工作台</span>
+                    <span class="spd-fluid-badge">ENTRY</span>
+                </span>
+                <div class="spd-fluid-drow1"></div>
+                <div class="spd-fluid-drow2"></div>
+            </a>
+            <button class="btn-cta-secondary" id="btn-quick-zen-cta">
+                <svg class="svg-icon" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                <span>进入纯享壁纸态 (ESC)</span>
+            </button>
+            <button class="btn-cta-secondary" id="btn-trigger-picker-cta">
+                <svg class="svg-icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                <span>自由选图/换视频</span>
+            </button>
+        </div>
+
+        <!-- 底部三大法定合规指标卡 -->
+        <div class="legal-metrics-grid">
+            <div class="metric-col">
+                <div class="metric-title">
+                    <svg class="svg-icon" style="color:#0284c7;" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                    <span>100% 审计穿透</span>
+                </div>
+                <div class="metric-desc">
+                    6W 物权交接流转全流程日志闭环，满足医保与卫健委飞行检查要求。
+                </div>
+            </div>
+
+            <div class="metric-col">
+                <div class="metric-title">
+                    <svg class="svg-icon" style="color:#10b981;" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                    <span>一物一码单品</span>
+                </div>
+                <div class="metric-desc">
+                    高值专仓拆包赋唯一 UDI 序列号，扫码核销绑定患者住院号并合规脱敏。
+                </div>
+            </div>
+
+            <div class="metric-col">
+                <div class="metric-title">
+                    <svg class="svg-icon" style="color:#f59e0b;" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                    <span>移库不计费</span>
+                </div>
+                <div class="metric-desc">
+                    院内科室调拨不计入成本，临床实际消耗即结算，理顺医院财务内控。
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- =====================================================================
+         全量 39 款壁纸工坊底部抽屉面板 (支持分类筛选 + 自由本地文件选取)
+         ===================================================================== -->
+    <div class="wallpaper-drawer-panel" id="wallpaper-drawer">
+        <div class="drawer-header">
+            <div class="drawer-title-group">
+                <svg class="svg-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                <span>Wallpaper Engine 本地工坊全量壁纸库 (E:\SteamLibrary\steamapps\workshop\content\431960)</span>
+            </div>
+            <button class="btn-theme" style="width:28px; height:28px;" id="btn-close-wallpaper">
+                <svg class="svg-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+        </div>
+
+        <!-- 顶部工具栏：分类 Tab 与自由文件选取 -->
+        <div class="drawer-toolbar">
+            <div class="filter-tabs">
+                <button class="filter-btn active" data-filter="all" id="filter-all">全部壁纸 (<span id="count-all">0</span>)</button>
+                <button class="filter-btn" data-filter="video" id="filter-video">4K/1080P 动态视频 (<span id="count-video">0</span>)</button>
+                <button class="filter-btn" data-filter="scene" id="filter-scene">超清原画/场景 (<span id="count-scene">0</span>)</button>
+                <button class="filter-btn" data-filter="preset" id="filter-preset">系统预设 (2)</button>
+            </div>
+
+            <!-- 动态底线微交互搜索框 (微动效 ③) -->
+            <form class="spd-search-form" id="spd-wallpaper-search-form" onsubmit="event.preventDefault();">
+                <button type="button" class="spd-search-btn" aria-label="搜索壁纸">
+                    <svg class="svg-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                </button>
+                <input class="spd-search-input" id="spd-search-input" placeholder="输入壁纸名称或序号筛选..." type="text" autocomplete="off" />
+                <button class="spd-search-reset" id="spd-search-reset" type="button" aria-label="清空搜索">
+                    <svg class="svg-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </form>
+
+            <div class="drawer-custom-actions">
+                <button class="btn-custom-picker" id="btn-toggle-clock" title="切换桌面实时数字时钟小部件">
+                    <svg class="svg-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    <span id="clock-toggle-text">桌面时钟: 开启</span>
+                </button>
+                <button class="btn-custom-picker" id="btn-pick-custom-file">
+                    <svg class="svg-icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>
+                    <span>自由选取电脑中任意壁纸/视频</span>
+                </button>
+                <input type="file" id="local-file-picker" accept="video/mp4,video/webm,image/*">
+            </div>
+        </div>
+
+        <!-- 动态滚动画廊网格 -->
+        <div class="wallpaper-scroll-container">
+            <div class="wallpaper-grid" id="wallpaper-grid-dynamic">
+                <!-- 动态注入所有项目 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 全局双环脉冲微加载指示器 (微动效 ②) -->
+    <div class="spd-spinner-backdrop" id="spd-global-spinner" style="display: none;">
+        <div class="spd-spinner-box">
+            <div class="spd-spinner-outer-ring">
+                <div class="spd-spinner-inner-pulse">
+                    <svg class="svg-icon spd-pulse-icon" viewBox="0 0 24 24">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                    </svg>
+                </div>
+            </div>
+            <div class="spd-spinner-text" id="spd-spinner-text">正在调度医疗资产引擎...</div>
+        </div>
+    </div>
+
+    <!-- 医慧通行现代医疗模态登录中枢 (微交互 ④) -->
+    <div class="spd-auth-backdrop" id="spd-login-modal" style="display: none;">
+        <div class="spd-auth-card" id="spd-auth-card">
+            <div class="spd-auth-header">
+                <div class="spd-auth-brand">
+                    <div class="brand-logo" style="width:28px;height:28px;">
+                        <svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 2v20M2 12h20"></path></svg>
+                    </div>
+                    <div>
+                        <div class="spd-auth-title">医慧通行 · 统一安全接入中枢</div>
+                        <div class="spd-auth-sub">医院 SPD 医疗物资全链管理与智能体协同平台</div>
+                    </div>
+                </div>
+                <button class="spd-auth-close" id="btn-close-login" aria-label="关闭认证弹窗">
+                    <svg class="svg-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <form class="spd-auth-form" id="spd-auth-form" onsubmit="event.preventDefault();">
+                <div class="spd-auth-field">
+                    <label class="spd-auth-label">医护工号 / 登录账号</label>
+                    <div class="spd-auth-input-wrap">
+                        <svg class="svg-icon spd-input-icon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                        <input type="text" class="spd-auth-input" id="login-account" placeholder="请输入医护人员工号 (如 SPD-ADMIN-01)" value="SPD-ADMIN-01" required />
+                    </div>
+                </div>
+                <div class="spd-auth-field">
+                    <label class="spd-auth-label">系统访问密钥</label>
+                    <div class="spd-auth-input-wrap">
+                        <svg class="svg-icon spd-input-icon" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                        <input type="password" class="spd-auth-input" id="login-password" placeholder="请输入安全密码" value="123456" required />
+                        <button type="button" class="spd-pwd-toggle" id="btn-toggle-pwd" aria-label="切换密码明暗文">
+                            <svg class="svg-icon" id="pwd-eye-icon" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="spd-auth-row">
+                    <label class="spd-checkbox-label">
+                        <input type="checkbox" id="login-remember" checked />
+                        <span>记住此工作台认证会话</span>
+                    </label>
+                    <a href="javascript:void(0)" class="spd-auth-link">安全证书协助</a>
+                </div>
+                <button type="button" class="spd-auth-submit" id="btn-submit-login">
+                    <span>立即验证并登录</span>
+                </button>
+                <div class="spd-auth-divider">
+                    <span>或选择演示角色一键免密体验</span>
+                </div>
+                <div class="spd-role-fast-grid">
+                    <button type="button" class="spd-role-btn" data-role="consumable" title="耗材科管理员">
+                        <svg class="svg-icon" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+                        <span>耗材科管理</span>
+                    </button>
+                    <button type="button" class="spd-role-btn" data-role="nurse" title="临床手术室护士">
+                        <svg class="svg-icon" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+                        <span>临床二级库</span>
+                    </button>
+                    <button type="button" class="spd-role-btn" data-role="finance" title="财务科审计">
+                        <svg class="svg-icon" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                        <span>财务合规审计</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 引入全量本地壁纸清单 (通过 script 标签引入，完全免除 file:// 协议下的 fetch CORS 限制) -->
+    <script src="wallpapers_manifest.js"></script>
+
+    <!-- =====================================================================
+         核心 JavaScript：双模态引擎、全量工坊动态渲染、自由选择与拖拽
+         ===================================================================== -->
+    <script>
+        // 10 大核心医疗物资数据源
+        const medicalAssets = [
+            { id: "01", tag: "药监局UDI", title: "产品字典双维档案", sub: "耗材科/设备科主库双归口", status: "已建档 5 项标准物料" },
+            { id: "02", tag: "效期硬风控", title: "主库集中验收入库", sub: "冷链温控监测 · 注册证资质比对", status: "主库在库 1,870 件" },
+            { id: "03", tag: "FEFO优先", title: "主库按需分发调拨", sub: "近效期先出 · 院内移库不计费", status: "已下发调拨单 200 支" },
+            { id: "04", tag: "一物一码SN", title: "高值专仓智能柜", sub: "由量到码智能拆包赋码锁定", status: "专柜锁定 37 套" },
+            { id: "05", tag: "定数包补货", title: "临床二级库房管理", sub: "骨科/心内科病区安全水位预警", status: "低库存自动申领就绪" },
+            { id: "06", tag: "消耗即结算", title: "患者扫码脱敏核销", sub: "临床手术消耗绑定住院号记账", status: "已脱敏核销: 张*丰" },
+            { id: "07", tag: "100%穿透", title: "全流程 6W 物权台账", sub: "人/物/时间/流向完整快照", status: "审计合规率 100%" },
+            { id: "08", tag: "法定单据", title: "医院四联签字单据", sub: "制单/主库/领用/财务责任签章", status: "符合三甲内控规范" },
+            { id: "09", tag: "智能调拨", title: "Agent 02 补货智能体", sub: "LangGraph 驱动多库房水位扫描", status: "毫秒级调度就绪" },
+            { id: "10", tag: "逆向召回", title: "Agent 04 溯源与召回", sub: "UDI 穿透溯源与问题批次冻结", status: "全链路闭环就绪" }
+        ];
+
+        /* --- 1. 装配引擎 A：360度环形轨道 (Orbital) --- */
+        const orbitRig = document.getElementById("orbit-rig");
+        const radius = 520;
+        medicalAssets.forEach((item, index) => {
+            const angleDeg = (index * 360) / medicalAssets.length;
+            const angleRad = (angleDeg * Math.PI) / 180;
+            const x = Math.round(Math.cos(angleRad) * radius);
+            const y = Math.round(Math.sin(angleRad) * radius);
+
+            const slot = document.createElement("div");
+            slot.className = "orbit-satellite-slot";
+            slot.style.transform = `translate(${x}px, ${y}px)`;
+
+            slot.innerHTML = `
+                <div class="satellite-counter-spin">
+                    <div class="medical-card-pod" onclick="location.href='spd_frontend_design_variants.html'">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span class="card-tag">${item.tag}</span>
+                            <span style="font-size:11px; opacity:0.6; font-family:monospace;">#${item.id}</span>
+                        </div>
+                        <div>
+                            <div class="card-headline">${item.title}</div>
+                            <div class="card-subtext">${item.sub}</div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:6px; font-size:11px; color:#059669; font-weight:600;">
+                            <span class="pulse-mini-dot"></span>
+                            <span>${item.status}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            orbitRig.appendChild(slot);
+        });
+
+        /* --- 2. 装配引擎 B：3D 弧面圆柱 8-切片极速流光 (Tilted Grid 60FPS) --- */
+        const SLICES = 8;
+        const CAMERA = 1.6;
+        const MAX_WIDTH = 55;
+        const tileHeightPercent = 28;
+        const aspectRatio = 16 / 9;
+        const gapPercent = 6;
+        const curveDeg = 75;
+        const speed = 4;
+        const axisYPercent = 50;
+
+        function calcArcRadius(bendRad) {
+            return (CAMERA - 1 + Math.cos(bendRad)) / (2 * CAMERA * Math.sin(bendRad));
+        }
+
+        function measureTiltedLayout(width, height) {
+            const bendRad = (curveDeg * Math.PI) / 180;
+            const h = Math.min((tileHeightPercent / 100) * height, ((MAX_WIDTH / 100) * width) / aspectRatio);
+            const r = width * calcArcRadius(bendRad);
+            const deg = (rad) => (rad * 180) / Math.PI;
+            const unit = deg(h / r);
+            const pitch = (aspectRatio + gapPercent / 100) * unit;
+            const limit = deg(bendRad) + (aspectRatio * unit) / 2;
+            const columns = Math.min(18, Math.max(8, Math.ceil((2 * limit) / pitch)));
+            const sweep = +((columns * pitch) / 2).toFixed(4);
+            return { h, radius: +r.toFixed(2), columns, sweep, unit: +unit.toFixed(4), limit: +Math.min(sweep, limit).toFixed(4) };
+        }
+
+        function buildTiltedGridCylinder() {
+            const band = document.getElementById("tgh-band");
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            const layout = measureTiltedLayout(width, height);
+            const { h, radius: r, columns, sweep, unit, limit } = layout;
+
+            band.style.perspective = `${Math.round(r * CAMERA)}px`;
+            band.style.perspectiveOrigin = `50% ${axisYPercent}%`;
+
+            const tileWidth = h * aspectRatio;
+            const tileHeight = h;
+            const share = aspectRatio / SLICES;
+            const sliceWidth = tileWidth / SLICES;
+            const duration = columns * speed;
+
+            const orbitAnimName = "tgh-cylinder-stream-master-v2";
+            let styleEl = document.getElementById("tgh-master-style-v2");
+            if (!styleEl) {
+                styleEl = document.createElement("style");
+                styleEl.id = "tgh-master-style-v2";
+                document.head.appendChild(styleEl);
+            }
+
+            styleEl.innerHTML = `
+                @keyframes ${orbitAnimName} {
+                    from { transform: translateZ(${r}px) rotateY(-${sweep}deg) translateZ(-${r}px); }
+                    to { transform: translateZ(${r}px) rotateY(${sweep}deg) translateZ(-${r}px); }
+                }
+                .tgh-tile-stream-master {
+                    animation: ${orbitAnimName} ${duration}s linear infinite;
+                }
+            `;
+
+            band.innerHTML = "";
+            for (let t = 0; t < columns; t++) {
+                const first = columns - 1 - t;
+                const tileIndex = (first) % medicalAssets.length;
+                const item = medicalAssets[tileIndex >= 0 ? tileIndex : (tileIndex + medicalAssets.length)];
+
+                const tileEl = document.createElement("div");
+                tileEl.className = "tgh-tile tgh-tile-stream-master";
+                tileEl.style.left = `calc(50% - ${tileWidth / 2}px)`;
+                tileEl.style.top = `calc(${axisYPercent}% - ${tileHeight / 2}px)`;
+                tileEl.style.width = `${tileWidth}px`;
+                tileEl.style.height = `${tileHeight}px`;
+                tileEl.style.animationDelay = `-${t * speed}s`;
+                tileEl.onclick = () => location.href = "spd_frontend_design_variants.html";
+
+                for (let k = 0; k < SLICES; k++) {
+                    const sliceEl = document.createElement("div");
+                    sliceEl.className = "tgh-slice" + (k === 0 ? " slice-first" : "") + (k === SLICES - 1 ? " slice-last" : "");
+                    sliceEl.style.left = `${(tileWidth - sliceWidth) / 2}px`;
+                    sliceEl.style.width = k === SLICES - 1 ? `${sliceWidth}px` : `${sliceWidth + 1}px`;
+                    sliceEl.style.height = `${tileHeight}px`;
+
+                    const angle = (aspectRatio / 2 - (k + 0.5) * share) * unit;
+                    sliceEl.style.transform = `translateZ(${r}px) rotateY(${angle.toFixed(4)}deg) translateZ(-${r}px)`;
+
+                    const canvasEl = document.createElement("div");
+                    canvasEl.className = "tgh-card-canvas";
+                    canvasEl.style.left = `-${k * sliceWidth}px`;
+                    canvasEl.style.width = `${tileWidth}px`;
+                    canvasEl.style.height = `${tileHeight}px`;
+
+                    canvasEl.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span class="card-tag">${item.tag}</span>
+                            <span style="font-size:11px; opacity:0.6; font-family:monospace;">#${item.id}</span>
+                        </div>
+                        <div>
+                            <div class="card-headline">${item.title}</div>
+                            <div class="card-subtext">${item.sub}</div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:6px; font-size:11px; color:#059669; font-weight:600;">
+                            <span class="pulse-mini-dot"></span>
+                            <span>${item.status}</span>
+                        </div>
+                    `;
+                    sliceEl.appendChild(canvasEl);
+                    tileEl.appendChild(sliceEl);
+                }
+                band.appendChild(tileEl);
+            }
+        }
+        buildTiltedGridCylinder();
+
+        /* --- 3. 双模态自适应书签切换逻辑 (Segmented View Switcher) --- */
+        const orbitalView = document.getElementById("orbital-container");
+        const tiltedView = document.getElementById("tilted-container");
+        const btnOrbital = document.getElementById("btn-mode-orbital");
+        const btnTilted = document.getElementById("btn-mode-tilted");
+        const centerBadgeText = document.getElementById("center-badge-text");
+
+        const STORAGE_KEY_WALLPAPER = "spd_active_wallpaper_id";
+        const STORAGE_KEY_VIEW_MODE = "spd_active_view_mode";
+
+        btnOrbital.addEventListener("click", () => {
+            btnOrbital.classList.add("active");
+            btnTilted.classList.remove("active");
+            orbitalView.classList.remove("hidden-mode");
+            tiltedView.classList.remove("active-mode");
+            centerBadgeText.innerText = "医疗物资全链路 SPD · 360° 环形卫星轨道大屏";
+            try { localStorage.setItem(STORAGE_KEY_VIEW_MODE, "orbital"); } catch (e) {}
+        });
+
+        btnTilted.addEventListener("click", () => {
+            btnTilted.classList.add("active");
+            btnOrbital.classList.remove("active");
+            orbitalView.classList.add("hidden-mode");
+            tiltedView.classList.add("active-mode");
+            centerBadgeText.innerText = "医疗物资全链路 SPD · 3D 弧面圆柱流光全景展厅";
+            try { localStorage.setItem(STORAGE_KEY_VIEW_MODE, "tilted"); } catch (e) {}
+        });
+
+        /* --- 4. Wallpaper Engine 创意工坊动态画廊全量渲染引擎 --- */
+        const wpDrawer = document.getElementById("wallpaper-drawer");
+        const btnToggleWp = document.getElementById("btn-toggle-wallpaper");
+        const btnCloseWp = document.getElementById("btn-close-wallpaper");
+        const wpMediaLayer = document.getElementById("wallpaper-media-layer");
+        const wpVideo = document.getElementById("wallpaper-video");
+        const wpGrid = document.getElementById("wallpaper-grid-dynamic");
+
+        let allWallpapersList = [];
+
+        // 默认预设
+        const defaultPresets = [
+            {
+                id: "preset-cyan",
+                title: "深空钛青医疗科技",
+                category: "preset",
+                resolutionBadge: "矢量光晕",
+                isPreset: true,
+                type: "gradient",
+                previewUrl: "",
+                videoUrl: ""
+            },
+            {
+                id: "preset-pure-white",
+                title: "极简白瓷高洁",
+                category: "preset",
+                resolutionBadge: "纯净高透",
+                isPreset: true,
+                type: "gradient-white",
+                previewUrl: "",
+                videoUrl: ""
+            }
+        ];
+
+        // 载入本地壁纸清单
+        function loadManifestWallpapers() {
+            if (window.WALLPAPERS_MANIFEST && window.WALLPAPERS_MANIFEST.items) {
+                allWallpapersList = [...defaultPresets, ...window.WALLPAPERS_MANIFEST.items];
+            } else {
+                // 离线/CORS 兜底：内置常用列表
+                allWallpapersList = [
+                    ...defaultPresets,
+                    {
+                        id: "2580793783",
+                        title: "雷电将军 (4K 原生动态视频)",
+                        category: "video",
+                        resolutionBadge: "4K 原生动态",
+                        hasVideo: true,
+                        previewUrl: "file:///E:/SteamLibrary/steamapps/workshop/content/431960/2580793783/preview.jpg",
+                        videoUrl: "file:///E:/SteamLibrary/steamapps/workshop/content/431960/2580793783/RaidenShogun.mp4"
+                    },
+                    {
+                        id: "2833904589",
+                        title: "丽芙·极昼（绮愿稚梦）4K60F去锯齿版",
+                        category: "video",
+                        resolutionBadge: "4K 原生动态",
+                        hasVideo: true,
+                        previewUrl: "file:///E:/SteamLibrary/steamapps/workshop/content/431960/2833904589/preview.gif",
+                        videoUrl: "file:///E:/SteamLibrary/steamapps/workshop/content/431960/2833904589/LifuLotto [H264 Lossless S=4 444]_1.50x_3840x2160_ahq-11_1.00x_3840x2160_thf-4.mp4"
+                    },
+                    {
+                        id: "3604525468",
+                        title: "鸣潮陈长生守岸人 (1080P 动态视频)",
+                        category: "video",
+                        resolutionBadge: "1080P 动态视频",
+                        hasVideo: true,
+                        previewUrl: "file:///E:/SteamLibrary/steamapps/workshop/content/431960/3604525468/preview.jpg",
+                        videoUrl: "file:///E:/SteamLibrary/steamapps/workshop/content/431960/3604525468/鸣潮陈长生守岸人.mp4"
+                    },
+                    {
+                        id: "3494616159",
+                        title: "雷电将军 · 紫夜神明 (超清原画)",
+                        category: "scene",
+                        resolutionBadge: "超清原画",
+                        hasVideo: false,
+                        previewUrl: "file:///E:/SteamLibrary/steamapps/workshop/content/431960/3494616159/preview.jpg",
+                        videoUrl: ""
+                    },
+                    {
+                        id: "3152309744",
+                        title: "旧言 · 黑白极简 (超清原画)",
+                        category: "scene",
+                        resolutionBadge: "超清原画",
+                        hasVideo: false,
+                        previewUrl: "file:///E:/SteamLibrary/steamapps/workshop/content/431960/3152309744/preview.jpg",
+                        videoUrl: ""
+                    }
+                ];
+            }
+            renderWallpaperGrid("all");
+            updateCounts();
+            restoreSavedPreferences();
+        }
+
+        /**
+         * 跨会话恢复用户上次保存的壁纸选择与视图模式
+         * @returns {void}
+         * @route internal://spd_integrated_showcase_demo/restoreSavedPreferences
+         * @throws {never}
+         */
+        function restoreSavedPreferences() {
+            try {
+                // 1. 恢复视图模式 (Orbital 轨道 vs Tilted 弧面)
+                const savedMode = localStorage.getItem(STORAGE_KEY_VIEW_MODE);
+                if (savedMode === "tilted") {
+                    btnTilted.click();
+                }
+
+                // 2. 恢复壁纸选择
+                const savedId = localStorage.getItem(STORAGE_KEY_WALLPAPER);
+                let targetItem = null;
+                if (savedId) {
+                    targetItem = allWallpapersList.find(i => i.id === savedId);
+                }
+                if (targetItem) {
+                    const targetCard = document.getElementById(`wp-item-${targetItem.id}`);
+                    applyWallpaperItem(targetItem, targetCard);
+                }
+
+                // 3. 恢复音频控制状态
+                if (typeof updateAudioControlUI === "function") {
+                    updateAudioControlUI();
+                }
+            } catch (e) {
+                console.warn("restoreSavedPreferences error:", e);
+            }
+        }
+
+        function updateCounts() {
+            const allCount = allWallpapersList.length;
+            const vidCount = allWallpapersList.filter(i => i.hasVideo).length;
+            const sceneCount = allWallpapersList.filter(i => !i.hasVideo && !i.isPreset).length;
+
+            document.getElementById("count-all").innerText = allCount;
+            document.getElementById("count-video").innerText = vidCount;
+            document.getElementById("count-scene").innerText = sceneCount;
+            document.getElementById("label-wp-btn").innerText = `壁纸工坊 (${allCount})`;
+        }
+
+        let activeCategoryFilter = "all";
+        let currentSearchKeyword = "";
+
+        /**
+         * 渲染壁纸网格 (支持分类 Tab 与动态搜索框关键词双重过滤)
+         * @param {string} [filter] 分类标签
+         * @returns {void}
+         * @route internal://spd_integrated_showcase_demo/renderWallpaperGrid
+         * @throws {never}
+         */
+        function renderWallpaperGrid(filter) {
+            if (filter !== undefined) activeCategoryFilter = filter;
+            wpGrid.innerHTML = "";
+            let filtered = allWallpapersList;
+            if (activeCategoryFilter === "video") filtered = allWallpapersList.filter(i => i.hasVideo);
+            else if (activeCategoryFilter === "scene") filtered = allWallpapersList.filter(i => !i.hasVideo && !i.isPreset);
+            else if (activeCategoryFilter === "preset") filtered = allWallpapersList.filter(i => i.isPreset);
+
+            if (currentSearchKeyword.trim()) {
+                const kw = currentSearchKeyword.trim().toLowerCase();
+                filtered = filtered.filter(i =>
+                    (i.title && i.title.toLowerCase().includes(kw)) ||
+                    (i.id && i.id.toString().includes(kw))
+                );
+            }
+
+            const activeWpId = localStorage.getItem(STORAGE_KEY_WALLPAPER) || (allWallpapersList[0] ? allWallpapersList[0].id : "");
+
+            filtered.forEach((item, index) => {
+                const card = document.createElement("div");
+                const isActive = item.id === activeWpId || (!activeWpId && index === 0 && filter === "all");
+                card.className = "wallpaper-thumb-card" + (isActive ? " active" : "");
+                card.id = `wp-item-${item.id}`;
+
+                let badgeClass = "badge-scene";
+                if (item.hasVideo) badgeClass = "badge-4k";
+                else if (item.resolutionBadge && item.resolutionBadge.includes("缩略图")) badgeClass = "badge-thumb";
+
+                let innerHtml = "";
+                if (item.type === "gradient") {
+                    innerHtml = `<div style="width:100%; height:100%; background:radial-gradient(ellipse at center, #0c4a6e 0%, #080c14 70%);"></div>`;
+                } else if (item.type === "gradient-white") {
+                    innerHtml = `<div style="width:100%; height:100%; background:linear-gradient(135deg, #e2e8f0 0%, #ffffff 100%);"></div>`;
+                } else {
+                    innerHtml = `<img src="${item.previewUrl}" alt="${item.title}" loading="lazy" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'200\\' height=\\'120\\'><rect width=\\'200\\' height=\\'120\\' fill=\\'%231e293b\\'/><text x=\\'50%\\' y=\\'50%\\' fill=\\'%2364748b\\' dominant-baseline=\\'middle\\' text-anchor=\\'middle\\' font-size=\\'12\\'>高清壁纸</text></svg>'">`;
+                }
+
+                card.innerHTML = `
+                    ${innerHtml}
+                    <div class="wallpaper-type-badge ${badgeClass}">${item.resolutionBadge}</div>
+                    <div class="wallpaper-thumb-title" title="${item.title}">${item.title}</div>
+                `;
+
+                card.onclick = () => applyWallpaperItem(item, card);
+                wpGrid.appendChild(card);
+            });
+        }
+
+        /**
+         * 应用选中的壁纸项，自动按原生类型呈现 4K/1080P 视频或超清满屏原画 (100% 满屏 Cover 无黑边)
+         * @param {object} item 壁纸清单数据项
+         * @param {HTMLElement} [cardElement] 对应缩略图卡片
+         * @returns {void}
+         * @route internal://spd_integrated_showcase_demo/applyWallpaperItem
+         * @throws {never}
+         */
+        /**
+         * 应用选中的壁纸项，自动按原生类型呈现 4K/1080P 视频或超清满屏原画 (100% 满屏 Cover 无黑边，同步原声音频)
+         * @param {object} item 壁纸清单数据项
+         * @param {HTMLElement} [cardElement] 对应缩略图卡片
+         * @returns {void}
+         * @route internal://spd_integrated_showcase_demo/applyWallpaperItem
+         * @throws {never}
+         */
+        function applyWallpaperItem(item, cardElement) {
+            document.querySelectorAll(".wallpaper-thumb-card").forEach(c => c.classList.remove("active"));
+            if (cardElement) cardElement.classList.add("active");
+
+            // 持久化存储用户选中的壁纸 ID，确保刷新与下次打开 100% 记忆复原
+            if (item && item.id) {
+                try {
+                    localStorage.setItem(STORAGE_KEY_WALLPAPER, item.id);
+                } catch (e) {
+                    console.warn("localStorage persistence error:", e);
+                }
+            }
+
+            // 1. 优先硬件加速原生 4K/1080P 视频
+            if (item.hasVideo && item.videoUrl) {
+                wpVideo.src = item.videoUrl;
+                wpVideo.classList.add("active");
+                wpVideo.play().catch(e => console.log("Auto-play ready"));
+                wpMediaLayer.style.backgroundImage = "none";
+                syncActiveWallpaperAudio(item);
+                return;
+            }
+
+            wpVideo.pause();
+            wpVideo.classList.remove("active");
+
+            // 2. 全屏大图分配铁律：严禁使用 160px 正方形小微图，强制采用解包出的 1080P/2K/4K/7K 宽屏大图
+            const targetImage = item.fullscreenUrl || item.previewUrl;
+
+            if (targetImage) {
+                // 强制宽屏 100% Cover 满铺，彻底根除竖屏狭窄感与两侧黑边，画质达到极限细腻
+                wpMediaLayer.style.backgroundSize = "cover";
+                wpMediaLayer.style.backgroundRepeat = "no-repeat";
+                wpMediaLayer.style.backgroundPosition = "center center";
+                wpMediaLayer.style.backgroundImage = `url("${targetImage}")`;
+            } else if (item.type === "gradient") {
+                wpMediaLayer.style.backgroundSize = "cover";
+                wpMediaLayer.style.backgroundImage = "radial-gradient(ellipse at center, #0c4a6e 0%, #080c14 70%)";
+            } else if (item.type === "gradient-white") {
+                wpMediaLayer.style.backgroundSize = "cover";
+                wpMediaLayer.style.backgroundImage = "linear-gradient(135deg, #e2e8f0 0%, #ffffff 100%)";
+            }
+
+            // 3. 同步场景壁纸音频流
+            syncActiveWallpaperAudio(item);
+        }
+
+        // 分类 Filter 切换
+        document.querySelectorAll(".filter-btn").forEach(btn => {
+            btn.addEventListener("click", () => {
+                document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+                btn.classList.add("active");
+                renderWallpaperGrid(btn.dataset.filter);
+            });
+        });
+
+        btnToggleWp.addEventListener("click", () => wpDrawer.classList.toggle("open"));
+        btnCloseWp.addEventListener("click", () => wpDrawer.classList.remove("open"));
+
+        /* --- 动态底线微交互搜索框输入与一键重置清空 --- */
+        const spdSearchInput = document.getElementById("spd-search-input");
+        const spdSearchReset = document.getElementById("spd-search-reset");
+        if (spdSearchInput) {
+            spdSearchInput.addEventListener("input", (e) => {
+                currentSearchKeyword = e.target.value;
+                renderWallpaperGrid();
+            });
+        }
+        if (spdSearchReset) {
+            spdSearchReset.addEventListener("click", () => {
+                if (spdSearchInput) {
+                    spdSearchInput.value = "";
+                    currentSearchKeyword = "";
+                    renderWallpaperGrid();
+                    spdSearchInput.focus();
+                }
+            });
+        }
+
+        /* --- 5. 自由选择本地任意文件 (File Picker) --- */
+        const filePicker = document.getElementById("local-file-picker");
+        const btnPickCustom = document.getElementById("btn-pick-custom-file");
+        const btnTriggerPickerCta = document.getElementById("btn-trigger-picker-cta");
+
+        function openFilePicker() {
+            filePicker.click();
+        }
+
+        btnPickCustom.addEventListener("click", openFilePicker);
+        btnTriggerPickerCta.addEventListener("click", openFilePicker);
+
+        filePicker.addEventListener("change", (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const url = URL.createObjectURL(file);
+            const isVideo = file.type.startsWith("video/") || file.name.toLowerCase().endsWith(".mp4");
+
+            if (isVideo) {
+                wpVideo.src = url;
+                wpVideo.classList.add("active");
+                wpVideo.play();
+                wpMediaLayer.style.backgroundImage = "none";
+            } else {
+                wpVideo.pause();
+                wpVideo.classList.remove("active");
+                wpMediaLayer.style.backgroundImage = `url("${url}")`;
+            }
+
+            // 动态加入到自定义项中
+            const customItem = {
+                id: "custom-" + Date.now(),
+                title: file.name,
+                category: isVideo ? "video" : "scene",
+                resolutionBadge: isVideo ? "自定义 4K 视频" : "自定义图片",
+                hasVideo: isVideo,
+                previewUrl: isVideo ? "" : url,
+                videoUrl: isVideo ? url : ""
+            };
+            allWallpapersList.unshift(customItem);
+            renderWallpaperGrid("all");
+            wpDrawer.classList.remove("open");
+        });
+
+        /* --- 6. 全局文件拖拽即映入 (Drag & Drop) --- */
+        const dragOverlay = document.getElementById("drag-drop-overlay");
+        let dragCounter = 0;
+
+        window.addEventListener("dragenter", (e) => {
+            e.preventDefault();
+            dragCounter++;
+            dragOverlay.classList.add("active");
+        });
+
+        window.addEventListener("dragleave", (e) => {
+            e.preventDefault();
+            dragCounter--;
+            if (dragCounter <= 0) {
+                dragOverlay.classList.remove("active");
+                dragCounter = 0;
+            }
+        });
+
+        window.addEventListener("dragover", (e) => {
+            e.preventDefault();
+        });
+
+        window.addEventListener("drop", (e) => {
+            e.preventDefault();
+            dragCounter = 0;
+            dragOverlay.classList.remove("active");
+
+            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                const file = e.dataTransfer.files[0];
+                const url = URL.createObjectURL(file);
+                const isVideo = file.type.startsWith("video/") || file.name.toLowerCase().endsWith(".mp4");
+
+                if (isVideo) {
+                    wpVideo.src = url;
+                    wpVideo.classList.add("active");
+                    wpVideo.play();
+                    wpMediaLayer.style.backgroundImage = "none";
+                } else {
+                    wpVideo.pause();
+                    wpVideo.classList.remove("active");
+                    wpMediaLayer.style.backgroundImage = `url("${url}")`;
+                }
+
+                // 加入列表首位
+                allWallpapersList.unshift({
+                    id: "drag-" + Date.now(),
+                    title: "拖入: " + file.name,
+                    category: isVideo ? "video" : "scene",
+                    resolutionBadge: isVideo ? "拖拽 4K 视频" : "拖拽超清图片",
+                    hasVideo: isVideo,
+                    previewUrl: isVideo ? "" : url,
+                    videoUrl: isVideo ? url : ""
+                });
+                renderWallpaperGrid("all");
+            }
+        });
+
+        /* --- 7. 纯享模式 (Zen Mode) 与一键唤醒机制 --- */
+        const btnEnterZen = document.getElementById("btn-enter-zen");
+        const btnQuickZenCta = document.getElementById("btn-quick-zen-cta");
+        const btnExitZen = document.getElementById("btn-exit-zen");
+
+        /**
+         * 进入 100% 绝对纯净壁纸纯享模式 (彻底隐藏所有前景卡片并冻结动画)
+         * @returns {void}
+         * @route internal://spd_integrated_showcase_demo/enterZenMode
+         * @throws {never}
+         */
+        function enterZenMode() {
+            document.body.classList.add("zen-pure-mode");
+            wpDrawer.classList.remove("open");
+        }
+
+        /**
+         * 退出纯享模式，唤醒复原工作台与主展厅
+         * @returns {void}
+         * @route internal://spd_integrated_showcase_demo/exitZenMode
+         * @throws {never}
+         */
+        function exitZenMode() {
+            document.body.classList.remove("zen-pure-mode");
+        }
+
+        btnEnterZen.addEventListener("click", (e) => {
+            e.stopPropagation();
+            enterZenMode();
+        });
+        btnQuickZenCta.addEventListener("click", (e) => {
+            e.stopPropagation();
+            enterZenMode();
+        });
+        btnExitZen.addEventListener("click", (e) => {
+            e.stopPropagation();
+            exitZenMode();
+        });
+
+        // 快捷键 ESC 退出纯享模式、关闭登录弹窗或关闭工坊抽屉
+        window.addEventListener("keydown", (e) => {
+            if (e.key === "Escape") {
+                if (spdLoginModal && spdLoginModal.style.display !== "none") {
+                    closeLoginModal();
+                } else if (document.body.classList.contains("zen-pure-mode")) {
+                    exitZenMode();
+                } else if (wpDrawer.classList.contains("open")) {
+                    wpDrawer.classList.remove("open");
+                }
+            }
+        });
+
+        // 纯享模式下点击屏幕任意空白区域即退出 (排除纯享控制微条与退出按钮)
+        window.addEventListener("click", (e) => {
+            if (document.body.classList.contains("zen-pure-mode")) {
+                if (!e.target.closest("#btn-exit-zen, #btn-enter-zen, #btn-quick-zen-cta, #zen-control-bar")) {
+                    exitZenMode();
+                }
+            }
+        });
+
+        /* --- 8. 动态壁纸音频全模态同步与自由音乐控制系统 --- */
+        const STORAGE_KEY_AUDIO_ENABLED = "spd_audio_enabled";
+        const STORAGE_KEY_AUDIO_VOLUME = "spd_audio_volume";
+
+        const wpAudio = document.getElementById("wallpaper-audio");
+        const btnToggleAudio = document.getElementById("btn-toggle-audio");
+        const audioIconSlot = document.getElementById("audio-icon-slot");
+        const audioLabelText = document.getElementById("audio-label-text");
+        const audioVolumeSlider = document.getElementById("audio-volume-slider");
+        const btnZenToggleAudio = document.getElementById("btn-zen-toggle-audio");
+        const zenAudioIconSlot = document.getElementById("zen-audio-icon-slot");
+        const zenAudioLabel = document.getElementById("zen-audio-label");
+
+        // 默认静音，优先读取本地持久化偏好
+        let isAudioEnabled = localStorage.getItem(STORAGE_KEY_AUDIO_ENABLED) === "true";
+        let currentAudioVolume = parseFloat(localStorage.getItem(STORAGE_KEY_AUDIO_VOLUME) || "0.65");
+        if (isNaN(currentAudioVolume)) currentAudioVolume = 0.65;
+        if (audioVolumeSlider) audioVolumeSlider.value = currentAudioVolume;
+
+        const SVG_AUDIO_ON = `<svg class="svg-icon" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>`;
+        const SVG_AUDIO_MUTED = `<svg class="svg-icon" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>`;
+
+        /**
+         * 刷新界面中全部音频按钮与图标状态
+         * @returns {void}
+         * @route internal://spd_integrated_showcase_demo/updateAudioControlUI
+         * @throws {never}
+         */
+        function updateAudioControlUI() {
+            const iconSvg = isAudioEnabled ? SVG_AUDIO_ON : SVG_AUDIO_MUTED;
+            const labelStr = isAudioEnabled ? "音乐开" : "静音";
+
+            if (audioIconSlot) audioIconSlot.innerHTML = iconSvg;
+            if (audioLabelText) audioLabelText.innerText = labelStr;
+            if (zenAudioIconSlot) zenAudioIconSlot.innerHTML = iconSvg;
+            if (zenAudioLabel) zenAudioLabel.innerText = labelStr;
+
+            if (btnToggleAudio) {
+                if (isAudioEnabled) btnToggleAudio.classList.add("active-audio");
+                else btnToggleAudio.classList.remove("active-audio");
+            }
+            if (btnZenToggleAudio) {
+                if (isAudioEnabled) btnZenToggleAudio.classList.add("active-audio");
+                else btnZenToggleAudio.classList.remove("active-audio");
+            }
+        }
+
+        /**
+         * 针对当前壁纸智能调度音频 (支持原生 MP4 视频音轨与场景外挂原声音频互斥播放)
+         * @param {object} [targetItem] 目标壁纸项
+         * @returns {void}
+         * @route internal://spd_integrated_showcase_demo/syncActiveWallpaperAudio
+         * @throws {never}
+         */
+        function syncActiveWallpaperAudio(targetItem) {
+            let item = targetItem;
+            if (!item) {
+                const currentWpId = localStorage.getItem(STORAGE_KEY_WALLPAPER);
+                item = allWallpapersList.find(i => i.id === currentWpId) || allWallpapersList[0];
+            }
+            if (!item) return;
+
+            if (item.hasVideo && item.videoUrl) {
+                // 1. 原生视频音轨：停止外挂 audio，解锁 video 音轨
+                if (wpAudio) {
+                    wpAudio.pause();
+                    wpAudio.src = "";
+                }
+                wpVideo.volume = currentAudioVolume;
+                wpVideo.muted = !isAudioEnabled;
+                if (isAudioEnabled) {
+                    wpVideo.play().catch(e => console.log("Video auto-play waiting user interaction"));
+                }
+            } else if (item.hasAudio && item.audioUrl) {
+                // 2. 场景壁纸原声音轨：静音视频，加载外挂 audio 播放
+                wpVideo.muted = true;
+                if (wpAudio) {
+                    const cleanUrl = item.audioUrl.replace(/\\/g, "/");
+                    if (!wpAudio.src.includes(cleanUrl.split("/").pop())) {
+                        wpAudio.src = cleanUrl;
+                    }
+                    wpAudio.volume = currentAudioVolume;
+                    if (isAudioEnabled) {
+                        wpAudio.play().catch(e => console.log("Scene audio play waiting user interaction"));
+                    } else {
+                        wpAudio.pause();
+                    }
+                }
+            } else {
+                // 3. 无音频壁纸：两者均静音或暂停
+                wpVideo.muted = true;
+                if (wpAudio) {
+                    wpAudio.pause();
+                    wpAudio.src = "";
+                }
+            }
+        }
+
+        /**
+         * 自由切换背景音乐开关
+         * @returns {void}
+         * @route internal://spd_integrated_showcase_demo/toggleAudioState
+         * @throws {never}
+         */
+        function toggleAudioState() {
+            isAudioEnabled = !isAudioEnabled;
+            try {
+                localStorage.setItem(STORAGE_KEY_AUDIO_ENABLED, isAudioEnabled ? "true" : "false");
+            } catch (e) {}
+            updateAudioControlUI();
+            syncActiveWallpaperAudio();
+        }
+
+        if (btnToggleAudio) {
+            btnToggleAudio.addEventListener("click", (e) => {
+                e.stopPropagation();
+                toggleAudioState();
+            });
+        }
+
+        if (btnZenToggleAudio) {
+            btnZenToggleAudio.addEventListener("click", (e) => {
+                e.stopPropagation();
+                toggleAudioState();
+            });
+        }
+
+        if (audioVolumeSlider) {
+            audioVolumeSlider.addEventListener("input", (e) => {
+                currentAudioVolume = parseFloat(e.target.value);
+                try {
+                    localStorage.setItem(STORAGE_KEY_AUDIO_VOLUME, currentAudioVolume.toString());
+                } catch (err) {}
+                if (wpVideo) wpVideo.volume = currentAudioVolume;
+                if (wpAudio) wpAudio.volume = currentAudioVolume;
+            });
+        }
+
+        // 快捷键 M 随心静音/播放
+        window.addEventListener("keydown", (e) => {
+            if (e.key === "m" || e.key === "M") {
+                if (document.activeElement && (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA")) return;
+                toggleAudioState();
+            }
+        });
+
+        // 首次初始化音频控件
+        updateAudioControlUI();
+        syncActiveWallpaperAudio();
+
+        /* --- 9. 桌面实时数字时钟初始化与开关 (Layer 0.8) --- */
+        let userClockEnabled = true;
+        const clockWidget = document.getElementById("desktop-clock-widget");
+        const clockTimeEl = document.getElementById("clock-time");
+        const clockDateEl = document.getElementById("clock-date");
+        const btnToggleClock = document.getElementById("btn-toggle-clock");
+        const clockToggleText = document.getElementById("clock-toggle-text");
+
+        /**
+         * 更新桌面实时时钟显示 (时分秒与年月日星期)
+         * @returns {void}
+         * @route internal://spd_integrated_showcase_demo/updateClock
+         * @throws {never}
+         */
+        function updateClock() {
+            const now = new Date();
+            const h = String(now.getHours()).padStart(2, '0');
+            const m = String(now.getMinutes()).padStart(2, '0');
+            const s = String(now.getSeconds()).padStart(2, '0');
+            if (clockTimeEl) clockTimeEl.innerText = `${h}:${m}:${s}`;
+
+            const year = now.getFullYear();
+            const month = now.getMonth() + 1;
+            const date = now.getDate();
+            const days = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+            if (clockDateEl) clockDateEl.innerText = `${year}年${month}月${date}日 ${days[now.getDay()]}`;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        if (btnToggleClock) {
+            btnToggleClock.addEventListener("click", () => {
+                userClockEnabled = !userClockEnabled;
+                if (userClockEnabled) {
+                    clockWidget.classList.add("active");
+                    clockWidget.classList.add("zen-show");
+                    if (clockToggleText) clockToggleText.innerText = "桌面时钟: 开启";
+                } else {
+                    clockWidget.classList.remove("active");
+                    clockWidget.classList.remove("zen-show");
+                    if (clockToggleText) clockToggleText.innerText = "桌面时钟: 关闭";
+                }
+            });
+        }
+
+        /* --- 10. 亮暗主题切换 --- */
+        const themeBtn = document.getElementById("theme-toggle-btn");
+        themeBtn.addEventListener("click", () => {
+            const currentTheme = document.documentElement.getAttribute("data-theme");
+            const targetTheme = currentTheme === "light" ? "dark" : "light";
+            document.documentElement.setAttribute("data-theme", targetTheme);
+        });
+
+        /* --- 11. 全局双环脉冲微加载指示器 (Dual-ring Pulsing Spinner) --- */
+        const spdGlobalSpinner = document.getElementById("spd-global-spinner");
+        const spdSpinnerText = document.getElementById("spd-spinner-text");
+
+        /**
+         * 展示全屏双环脉冲微加载指示器
+         * @param {string} [text] 提示文案
+         * @returns {void}
+         * @route internal://spd_integrated_showcase_demo/showSpdSpinner
+         * @throws {never}
+         */
+        window.showSpdSpinner = function(text = "正在调度医疗资产引擎...") {
+            if (spdSpinnerText) spdSpinnerText.innerText = text;
+            if (spdGlobalSpinner) spdGlobalSpinner.style.display = "flex";
+        };
+
+        /**
+         * 隐藏全屏双环脉冲微加载指示器
+         * @returns {void}
+         * @route internal://spd_integrated_showcase_demo/hideSpdSpinner
+         * @throws {never}
+         */
+        window.hideSpdSpinner = function() {
+            if (spdGlobalSpinner) spdGlobalSpinner.style.display = "none";
+        };
+
+        /* --- 12. 医慧通行现代医疗模态登录中枢 (Modal Auth Card) --- */
+        const btnOpenLogin = document.getElementById("btn-open-login");
+        const spdLoginModal = document.getElementById("spd-login-modal");
+        const btnCloseLogin = document.getElementById("btn-close-login");
+        const btnTogglePwd = document.getElementById("btn-toggle-pwd");
+        const loginPasswordInput = document.getElementById("login-password");
+        const pwdEyeIcon = document.getElementById("pwd-eye-icon");
+        const btnSubmitLogin = document.getElementById("btn-submit-login");
+        const roleButtons = document.querySelectorAll(".spd-role-btn");
+
+        /**
+         * 打开医慧通行登录模态窗口
+         * @returns {void}
+         * @route internal://spd_integrated_showcase_demo/openLoginModal
+         * @throws {never}
+         */
+        function openLoginModal() {
+            if (spdLoginModal) {
+                spdLoginModal.style.display = "flex";
+            }
+        }
+
+        /**
+         * 关闭医慧通行登录模态窗口
+         * @returns {void}
+         * @route internal://spd_integrated_showcase_demo/closeLoginModal
+         * @throws {never}
+         */
+        function closeLoginModal() {
+            if (spdLoginModal) {
+                spdLoginModal.style.display = "none";
+            }
+        }
+
+        if (btnOpenLogin) {
+            btnOpenLogin.addEventListener("click", (e) => {
+                e.stopPropagation();
+                openLoginModal();
+            });
+        }
+
+        if (btnCloseLogin) {
+            btnCloseLogin.addEventListener("click", (e) => {
+                e.stopPropagation();
+                closeLoginModal();
+            });
+        }
+
+        if (spdLoginModal) {
+            spdLoginModal.addEventListener("click", (e) => {
+                if (e.target === spdLoginModal) {
+                    closeLoginModal();
+                }
+            });
+        }
+
+        if (btnTogglePwd && loginPasswordInput) {
+            btnTogglePwd.addEventListener("click", () => {
+                const isPwd = loginPasswordInput.type === "password";
+                loginPasswordInput.type = isPwd ? "text" : "password";
+                if (pwdEyeIcon) {
+                    pwdEyeIcon.innerHTML = isPwd
+                        ? '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>'
+                        : '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
+                }
+            });
+        }
+
+        const roleAccountMap = {
+            consumable: { account: "SPD-CONSUMABLE-01", name: "耗材科管理员" },
+            nurse: { account: "SPD-NURSE-06", name: "临床手术室护士" },
+            finance: { account: "SPD-AUDIT-08", name: "财务科合规审计" }
+        };
+
+        roleButtons.forEach(btn => {
+            btn.addEventListener("click", () => {
+                const roleKey = btn.dataset.role;
+                const info = roleAccountMap[roleKey];
+                if (info) {
+                    const accInput = document.getElementById("login-account");
+                    if (accInput) accInput.value = info.account;
+                    showSpdSpinner(`正在以 [${info.name}] 身份建立双向通道...`);
+                    setTimeout(() => {
+                        hideSpdSpinner();
+                        closeLoginModal();
+                    }, 600);
+                }
+            });
+        });
+
+        if (btnSubmitLogin) {
+            btnSubmitLogin.addEventListener("click", () => {
+                showSpdSpinner("正在核验 CA 数字证书与安全令牌...");
+                setTimeout(() => {
+                    hideSpdSpinner();
+                    closeLoginModal();
+                }, 700);
+            });
+        }
+
+        // 初始化加载
+        loadManifestWallpapers();
+    </script>
+</body>
+</html>

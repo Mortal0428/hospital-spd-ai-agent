@@ -492,16 +492,56 @@
             <div class="pane-action-bar">
               <div class="action-desc-text">
                 <SvgIcon name="warning" :size="15" color="var(--color-warning)" />
-                <span>各临床病区二级库之间应急调剂与常备耗材安全库存预警</span>
+                <span>各临床病区二级库之间应急调剂与常备耗材安全库存预警 · 双向审核验收</span>
               </div>
               <div class="action-btn-group">
-                <el-button type="primary" size="small" @click="transferModalVisible = true">
+                <el-button type="primary" size="small" @click="openTransferModal">
                   <SvgIcon name="refresh" :size="13" style="margin-right: 4px;" />
                   发起跨病区应急调拨
+                </el-button>
+                <el-button plain size="small" @click="fetchWardTransfers">
+                  <SvgIcon name="refresh" :size="13" style="margin-right: 4px;" />
+                  刷新调拨单
                 </el-button>
               </div>
             </div>
 
+            <!-- 待目标病区审核接收的跨病区调入单 (双向闭环) -->
+            <div v-if="pendingIncomingTransfers.length > 0" class="incoming-transfer-alert-box" style="margin-bottom: 16px; border: 1.5px solid var(--spd-warning, #f59e0b); border-radius: 8px; padding: 12px; background: rgba(245, 158, 11, 0.08);">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                <span class="font-bold text-warning" style="font-size: 13px;">
+                  待本科室审核接收的调入单据 (共 {{ pendingIncomingTransfers.length }} 笔待验收入库)
+                </span>
+                <span style="font-size: 11px; color: var(--text-muted);">核验实物外观与批号后点击接收确认增库</span>
+              </div>
+              <el-table :data="pendingIncomingTransfers" border stripe size="small" class="fusion-styled-table">
+                <el-table-column prop="order_no" label="调拨单号" width="165" class-name="font-mono text-accent" />
+                <el-table-column prop="from_warehouse_code" label="调出病区" width="130" />
+                <el-table-column prop="product_name" label="调拨耗材品名" min-width="150" />
+                <el-table-column prop="transfer_qty" label="调拨数量" width="90" align="right">
+                  <template #default="{ row }">
+                    <span class="font-mono tabular-nums font-bold text-danger">{{ row.transfer_qty }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="operator_name" label="开单经办人" width="100" />
+                <el-table-column prop="reason_note" label="事由说明" min-width="140" show-overflow-tooltip />
+                <el-table-column label="调入审核操作" width="170" align="center" fixed="right">
+                  <template #default="{ row }">
+                    <el-button type="success" size="small" @click="handleAuditTransfer(row, 'ACCEPT')">
+                      确认接收入库
+                    </el-button>
+                    <el-button type="danger" plain size="small" @click="handleAuditTransfer(row, 'REJECT')">
+                      驳回拒收
+                    </el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+
+            <!-- 安全水位基准监控表 -->
+            <div style="margin-bottom: 8px; font-size: 12px; font-weight: 600; color: var(--text-secondary);">
+              本科室常备耗材安全基准水位
+            </div>
             <el-table :data="safetyStockList" border stripe class="fusion-styled-table">
               <el-table-column prop="product_code" label="耗材编码" width="140" class-name="font-mono text-accent" />
               <el-table-column prop="product_name" label="物资品名" min-width="190" />
@@ -528,6 +568,34 @@
                   <span v-else class="status-chip chip-active">库存充盈正常</span>
                 </template>
               </el-table-column>
+            </el-table>
+
+            <!-- 跨病区调拨双向留存台账 -->
+            <div style="margin: 16px 0 8px; font-size: 12px; font-weight: 600; color: var(--text-secondary);">
+              本科室跨病区调拨流转台账 (双方双向留痕追溯)
+            </div>
+            <el-table :data="wardTransferOrders" border stripe size="small" class="fusion-styled-table" v-loading="loadingTransfers">
+              <el-table-column prop="order_no" label="调拨单号" width="165" class-name="font-mono text-accent" />
+              <el-table-column prop="from_warehouse_code" label="调出病区" width="130" />
+              <el-table-column prop="to_warehouse_code" label="调入病区" width="130" />
+              <el-table-column prop="product_name" label="耗材名称" min-width="140" />
+              <el-table-column prop="transfer_qty" label="调拨数量" width="90" align="right">
+                <template #default="{ row }">
+                  <span class="font-mono tabular-nums font-bold">{{ row.transfer_qty }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="confirm_stage" label="流转状态" width="120" align="center">
+                <template #default="{ row }">
+                  <span v-if="row.confirm_stage === 'PENDING_TARGET_RECEIVE'" class="status-chip chip-disabled">待目标病区审核</span>
+                  <span v-else-if="row.confirm_stage === 'TRANSFERRED'" class="status-chip chip-active">调拨入库完成</span>
+                  <span v-else class="status-chip chip-disabled">已驳回退回</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="operator_name" label="开单人" width="90" />
+              <el-table-column prop="confirmed_by" label="审核接收人" width="100">
+                <template #default="{ row }">{{ row.confirmed_by || '-' }}</template>
+              </el-table-column>
+              <el-table-column prop="created_at" label="调拨时间" width="150" class-name="font-mono" />
             </el-table>
 
             <!-- 手动发料台账分页条 -->
@@ -997,18 +1065,19 @@
 
         <div class="voucher-header-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px;">
           <div class="form-group">
-            <label class="form-label font-bold" style="font-size: 11px;">调拨单号</label>
-            <input v-model="transferVoucherNo" readonly class="spd-input font-mono readonly-input" />
+            <label class="form-label font-bold" style="font-size: 11px;">调拨单号 (全自动生成)</label>
+            <input v-model="transferVoucherNo" readonly disabled class="spd-input font-mono readonly-input" style="background: rgba(148, 163, 184, 0.12);" />
           </div>
           <div class="form-group">
-            <label class="form-label font-bold" style="font-size: 11px;">调出病区 (本仓)</label>
-            <input :value="currentDeptName" readonly class="spd-input font-bold readonly-input" />
+            <label class="form-label font-bold" style="font-size: 11px;">调出病区 (本仓锁定)</label>
+            <input :value="currentDeptName" readonly disabled class="spd-input font-bold readonly-input" style="background: rgba(148, 163, 184, 0.12);" />
           </div>
           <div class="form-group">
-            <label class="form-label required font-bold" style="font-size: 11px;">调入目标病区</label>
+            <label class="form-label required font-bold" style="font-size: 11px;">调入目标病区 (动态排除本仓)</label>
             <select v-model="transferForm.to_warehouse_code" class="spd-select font-bold">
-              <option value="WH_SEC_CARDIO">心内科病区二级库 (WH_SEC_CARDIO)</option>
-              <option value="WH_SEC_ORTHO">骨科病区二级库 (WH_SEC_ORTHO)</option>
+              <option v-for="w in availableTargetWarehouses" :key="w.warehouse_code" :value="w.warehouse_code">
+                {{ w.warehouse_name }}
+              </option>
             </select>
           </div>
           <div class="form-group" style="grid-column: span 2;">
@@ -1017,7 +1086,7 @@
           </div>
           <div class="form-group">
             <label class="form-label font-bold" style="font-size: 11px;">经办护士</label>
-            <input :value="userStore.currentUser.realName" readonly class="spd-input readonly-input" />
+            <input :value="userStore.currentUser.realName" readonly disabled class="spd-input readonly-input" style="background: rgba(148, 163, 184, 0.12);" />
           </div>
         </div>
 
@@ -1404,11 +1473,22 @@ function handleRequisitionRowDblClick(row: any) {
   openRequisitionDetail(row);
 }
 
-function switchDept(deptCode: string) {
+async function switchDept(deptCode: string) {
   currentDeptCode.value = deptCode;
   ElMessage.info(`已切换查看病区：${deptCode === 'WH_SEC_ORTHO' ? '骨科病区二级库' : '心内科病区二级库'}`);
-  fetchRequisitions();
-  fetchManualOutbounds();
+  // 彻底清空各表格数据，防止跨科室数据串岗
+  pendingReceives.value = [];
+  secondaryInventoryList.value = [];
+  requisitions.value = [];
+  manualOutbounds.value = [];
+  wardTransferOrders.value = [];
+  await Promise.allSettled([
+    fetchRequisitions(),
+    fetchPendingReceives(),
+    fetchSecondaryInventory(),
+    fetchManualOutbounds(),
+    fetchWardTransfers()
+  ]);
 }
 
 /**
@@ -1784,6 +1864,60 @@ async function handleSaveManualOutboundVoucher() {
 const transferVoucherNo = ref('');
 const transferItems = ref<any[]>([]);
 const showSecSelectModalForTransfer = ref(false);
+const wardTransferOrders = ref<any[]>([]);
+const loadingTransfers = ref(false);
+
+const availableTargetWarehouses = computed(() => {
+  const allWards = [
+    { warehouse_code: 'WH_SEC_ORTHO', warehouse_name: '骨科病区二级库 (WH_SEC_ORTHO)' },
+    { warehouse_code: 'WH_SEC_CARDIO', warehouse_name: '心内科病区二级库 (WH_SEC_CARDIO)' },
+    { warehouse_code: 'WH_SEC_SURGERY', warehouse_name: '普外病区二级库 (WH_SEC_SURGERY)' },
+    { warehouse_code: 'WH_SEC_ICU', warehouse_name: '重症ICU病区二级库 (WH_SEC_ICU)' }
+  ];
+  return allWards.filter(w => w.warehouse_code !== currentDeptCode.value);
+});
+
+const pendingIncomingTransfers = computed(() => {
+  return wardTransferOrders.value.filter(
+    o => o.to_warehouse_code === currentDeptCode.value && o.confirm_stage === 'PENDING_TARGET_RECEIVE'
+  );
+});
+
+async function fetchWardTransfers() {
+  loadingTransfers.value = true;
+  try {
+    const res = await httpGet<any[]>('/ext/orders/ward-transfer/list', {
+      warehouse_code: currentDeptCode.value,
+      confirm_stage: 'ALL'
+    });
+    wardTransferOrders.value = res || [];
+  } catch {
+    wardTransferOrders.value = [];
+  } finally {
+    loadingTransfers.value = false;
+  }
+}
+
+async function handleAuditTransfer(order: any, action: 'ACCEPT' | 'REJECT') {
+  try {
+    const actionText = action === 'ACCEPT' ? '确认接收入库' : '驳回拒收';
+    await ElMessageBox.confirm(`确认对调拨单 [${order.order_no}] 执行【${actionText}】吗？`, '调拨审核确认', {
+      type: action === 'ACCEPT' ? 'success' : 'warning'
+    });
+    await httpPost(`/ext/orders/ward-transfer/${order.order_no}/audit`, {
+      action,
+      auditor_name: userStore.currentUser.realName,
+      audit_remark: action === 'ACCEPT' ? '实物包装完好，规格批号核验无误已确认入库' : '实物外观或规格不符驳回'
+    });
+    ElMessage.success(`调拨单 [${order.order_no}] 已成功${actionText}！`);
+    await fetchWardTransfers();
+    await fetchSecondaryInventory();
+  } catch (err: any) {
+    if (err !== 'cancel') {
+      ElMessage.error(err.message || '审核操作失败');
+    }
+  }
+}
 
 const transferTotalQty = computed(() =>
   transferItems.value.reduce((acc, cur) => acc + (Number(cur.transfer_qty) || 0), 0)
@@ -1797,7 +1931,8 @@ function openTransferModal() {
   const ts = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
   transferVoucherNo.value = `TR936${ts}`;
   transferItems.value = [];
-  transferForm.value.to_warehouse_code = currentDeptCode.value === 'WH_SEC_ORTHO' ? 'WH_SEC_CARDIO' : 'WH_SEC_ORTHO';
+  const targetOption = availableTargetWarehouses.value[0];
+  transferForm.value.to_warehouse_code = targetOption ? targetOption.warehouse_code : 'WH_SEC_CARDIO';
   transferForm.value.reason_note = '抢救急用跨病区应急调剂无菌敷料';
   transferModalVisible.value = true;
 }
@@ -1828,8 +1963,10 @@ async function handleSaveTransferVoucher() {
     return;
   }
   try {
-    const targetName = transferForm.value.to_warehouse_code === 'WH_SEC_CARDIO' ? '心内科病区二级库' : '骨科病区二级库';
+    const targetMatch = availableTargetWarehouses.value.find(w => w.warehouse_code === transferForm.value.to_warehouse_code);
+    const targetName = targetMatch ? targetMatch.warehouse_name : '目标病区二级库';
     await httpPost('/ext/orders/ward-transfer', {
+      transfer_order_no: transferVoucherNo.value,
       from_warehouse_code: currentDeptCode.value,
       from_dept_name: currentDeptName.value,
       to_warehouse_code: transferForm.value.to_warehouse_code,
@@ -1844,10 +1981,10 @@ async function handleSaveTransferVoucher() {
         unit_price: item.unit_price || 8.5
       }))
     });
-    ElMessage.success('跨病区科室调拨单已生成并生效！双方库房已留存调拨流水记录并增减库存。');
+    ElMessage.success(`跨病区科室调拨单 [${transferVoucherNo.value}] 已提交！已生成在途流转单，等待目标科室审核接收。`);
     transferModalVisible.value = false;
     await fetchSecondaryInventory();
-    await fetchManualOutbounds();
+    await fetchWardTransfers();
   } catch (err: any) {
     ElMessage.error(err.message || '调拨出库失败');
   }
@@ -2022,7 +2159,10 @@ function handleTabChange(tabName: any) {
   else if (tabName === 'stock') fetchSecondaryInventory();
   else if (tabName === 'manual-out') fetchManualOutbounds();
   else if (tabName === 'stocktake') fetchSecondaryStocktake();
-  else if (tabName === 'transfer') fetchManualOutbounds();
+  else if (tabName === 'transfer') {
+    fetchManualOutbounds();
+    fetchWardTransfers();
+  }
 }
 
 onMounted(async () => {
@@ -2030,6 +2170,7 @@ onMounted(async () => {
   fetchPendingReceives();
   fetchSecondaryInventory();
   fetchManualOutbounds();
+  fetchWardTransfers();
   try {
     const spRes = await listSpecs();
     allSpecs.value = spRes || [];

@@ -394,6 +394,114 @@
             />
           </div>
         </el-tab-pane>
+
+        <!-- =====================================================================
+             Tab 6: 全院/分仓高值实时库存 (对标普通耗材主库全院穿透查看)
+             ===================================================================== -->
+        <el-tab-pane label="全院/分仓高值实时库存" name="realtime">
+          <div class="tab-content-area">
+            <div class="pane-action-bar">
+              <div class="action-desc-text">
+                <SvgIcon name="pulse" :size="15" color="var(--accent-primary)" />
+                <span>全院高值智能专柜单品实时在库台账 · 一物一码 UDI 全生命周期穿透监控 · 效期预警</span>
+              </div>
+              <div class="action-btn-group">
+                <el-select v-model="realtimeCabinetFilter" size="small" placeholder="按专柜筛选" style="width: 180px;" @change="fetchRealtimeHvStock">
+                  <el-option label="全部授权专柜汇总" value="ALL" />
+                  <el-option label="心血管智能专柜-A01" value="心血管" />
+                  <el-option label="骨科手术室智能专柜-B02" value="骨科" />
+                  <el-option label="高值专仓-总仓专柜01" value="高值专仓" />
+                </el-select>
+                <el-input
+                  v-model="realtimeHvKeyword"
+                  placeholder="UDI/编码/品名/批号..."
+                  size="small"
+                  style="width: 190px;"
+                  clearable
+                  @keyup.enter="fetchRealtimeHvStock"
+                />
+                <el-button plain size="small" @click="fetchRealtimeHvStock">
+                  <SvgIcon name="refresh" :size="13" style="margin-right: 4px;" />
+                  刷新高值库存
+                </el-button>
+              </div>
+            </div>
+
+            <div class="realtime-kpi-summary-row" style="display: flex; gap: 16px; margin-bottom: 12px; font-size: 13px;">
+              <span class="status-chip chip-info font-bold">全院高值在柜单品总数: <strong class="font-mono">{{ realtimeHvTotalQty }}</strong> 件</span>
+              <span class="status-chip chip-active font-bold">全院高值实物在柜资产总值: <strong class="font-mono">¥ {{ realtimeHvTotalAmount.toFixed(2) }}</strong></span>
+            </div>
+
+            <el-table :data="realtimeHvList" border stripe size="small" class="fusion-styled-table" v-loading="loadingRealtimeHv">
+              <el-table-column type="index" label="序号" width="55" align="center" />
+              <el-table-column prop="wh_cabinet_code" label="存放智能专柜 / 位置" min-width="160" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <span class="font-bold text-accent">{{ row.wh_cabinet_code || '高值专仓智能柜' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="udi_sn" label="单品 UDI" width="165" class-name="font-mono text-accent" />
+              <el-table-column prop="product_code" label="物料代码" width="130" class-name="font-mono" />
+              <el-table-column prop="product_name" label="耗材品名" min-width="170" />
+              <el-table-column prop="spec_model" label="规格型号" width="130" show-overflow-tooltip />
+              <el-table-column prop="batch_no" label="生产批次" width="115" class-name="font-mono" />
+              <el-table-column prop="expiry_date" label="有效期至" width="110" class-name="font-mono tabular-nums" />
+              <el-table-column prop="unit_price" label="单价" width="100" align="right">
+                <template #default="{ row }">
+                  <span class="font-mono font-bold">¥ {{ Number(row.unit_price || 0).toFixed(2) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="item_status" label="在库状态" width="120" align="center">
+                <template #default="{ row }">
+                  <span v-if="row.item_status === 'IN_HIGH_VALUE_WH' || row.item_status === 'IN_SECONDARY_CABINET'" class="status-chip chip-active">在柜正常</span>
+                  <span v-else-if="row.item_status === 'USED_VERIFIED'" class="status-chip chip-info">已核销出库</span>
+                  <span v-else-if="row.item_status === 'RECALLED'" class="status-chip chip-disabled">召回锁定</span>
+                  <span v-else class="status-chip chip-locked">{{ row.item_status }}</span>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </el-tab-pane>
+
+        <!-- =====================================================================
+             Tab 7: 高值专柜期初建账 (不可逆锁)
+             ===================================================================== -->
+        <el-tab-pane label="高值专柜期初建账 (不可逆锁)" name="init-stock">
+          <div class="tab-content-area">
+            <div class="pane-action-bar">
+              <div class="action-desc-text">
+                <SvgIcon name="lock" :size="15" color="var(--color-warning)" />
+                <span>全院高值智能专柜期初一物一码建账数据 · 专柜初始化一次性锁定 · 管理员全院穿透查看</span>
+              </div>
+              <div class="action-btn-group">
+                <el-button plain size="small" @click="fetchInitialHvStock">
+                  <SvgIcon name="refresh" :size="13" style="margin-right: 4px;" />
+                  刷新期初数据
+                </el-button>
+              </div>
+            </div>
+
+            <el-table :data="initialHvList" border stripe size="small" class="fusion-styled-table" v-loading="loadingInitialHv">
+              <el-table-column type="index" label="序号" width="55" align="center" />
+              <el-table-column prop="cabinet_code" label="智能专柜" width="160" show-overflow-tooltip />
+              <el-table-column prop="udi_sn" label="单品 UDI" width="165" class-name="font-mono text-accent" />
+              <el-table-column prop="product_code" label="产品代码" width="130" class-name="font-mono" />
+              <el-table-column prop="product_name" label="耗材品名" min-width="170" />
+              <el-table-column prop="spec_model" label="规格型号" width="120" />
+              <el-table-column prop="batch_no" label="批次号" width="115" class-name="font-mono" />
+              <el-table-column prop="unit_price" label="核算单价" width="100" align="right">
+                <template #default="{ row }">
+                  <span class="font-mono font-bold">¥ {{ Number(row.unit_price || 0).toFixed(2) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="建账锁定状态" width="130" align="center">
+                <template #default>
+                  <span class="status-chip chip-disabled">不可逆锁定</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="locked_at" label="建账锁定时间" width="160" class-name="font-mono tabular-nums" />
+            </el-table>
+          </div>
+        </el-tab-pane>
       </el-tabs>
     </div>
 
@@ -719,18 +827,44 @@ function formatDeptName(code: string): string {
   return map[code] || code || '临床病区';
 }
 
-/**
- * 监听路由参数中的 query.tab 联动切换
- */
-watch(
-  () => route.query.tab,
-  (newTab) => {
-    if (newTab && ['inbound', 'stock', 'coding', 'return', 'stocktake'].includes(newTab as string)) {
-      activeTab.value = newTab as string;
-    }
-  },
-  { immediate: true }
-);
+const realtimeCabinetFilter = ref('ALL');
+const realtimeHvKeyword = ref('');
+const realtimeHvList = ref<any[]>([]);
+const loadingRealtimeHv = ref(false);
+const realtimeHvTotalQty = ref(0);
+const realtimeHvTotalAmount = ref(0);
+
+async function fetchRealtimeHvStock() {
+  loadingRealtimeHv.value = true;
+  try {
+    const res = await httpGet<any>('/high-value/realtime-stock', {
+      cabinet_code: realtimeCabinetFilter.value,
+      keyword: realtimeHvKeyword.value
+    });
+    realtimeHvList.value = res?.items || [];
+    realtimeHvTotalQty.value = res?.in_stock_qty || res?.total_items || 0;
+    realtimeHvTotalAmount.value = res?.total_amount || 0;
+  } catch {
+    realtimeHvList.value = [];
+  } finally {
+    loadingRealtimeHv.value = false;
+  }
+}
+
+const initialHvList = ref<any[]>([]);
+const loadingInitialHv = ref(false);
+
+async function fetchInitialHvStock() {
+  loadingInitialHv.value = true;
+  try {
+    const res = await httpGet<any[]>('/high-value/initial-stock');
+    initialHvList.value = res || [];
+  } catch {
+    initialHvList.value = [];
+  } finally {
+    loadingInitialHv.value = false;
+  }
+}
 
 function handleTabChange(tabName: any) {
   router.replace({ query: { ...route.query, tab: tabName } });
@@ -739,7 +873,23 @@ function handleTabChange(tabName: any) {
   else if (tabName === 'coding') fetchVerified();
   else if (tabName === 'return') fetchReturnData();
   else if (tabName === 'stocktake') loadStocktakeBase();
+  else if (tabName === 'realtime') fetchRealtimeHvStock();
+  else if (tabName === 'init-stock') fetchInitialHvStock();
 }
+
+/**
+ * 监听路由参数中的 query.tab 联动切换
+ */
+watch(
+  () => route.query.tab,
+  (newTab) => {
+    if (newTab && ['inbound', 'stock', 'coding', 'return', 'stocktake', 'realtime', 'init-stock'].includes(newTab as string)) {
+      activeTab.value = newTab as string;
+      if (newTab === 'realtime') fetchRealtimeHvStock();
+      else if (newTab === 'init-stock') fetchInitialHvStock();
+    }
+  }
+);
 
 /**
  * 加载备货申请单据
@@ -1080,10 +1230,16 @@ async function handleSubmitStocktake() {
 }
 
 onMounted(() => {
+  const currentTab = (route.query.tab as string) || 'inbound';
+  if (['inbound', 'stock', 'coding', 'return', 'stocktake', 'realtime', 'init-stock'].includes(currentTab)) {
+    activeTab.value = currentTab;
+  }
   fetchPrepData();
   fetchItemsData();
   fetchVerified();
   fetchReturnData();
+  fetchRealtimeHvStock();
+  fetchInitialHvStock();
 });
 </script>
 

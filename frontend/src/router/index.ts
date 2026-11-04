@@ -30,49 +30,49 @@ const routes: RouteRecordRaw[] = [
         path: 'dict',
         name: 'ProductDict',
         component: () => import('@/views/ProductDictView.vue'),
-        meta: { title: '1. 产品字典管理 (双维分类)' }
+        meta: { title: '1. 产品字典管理 (双维分类)', roles: ['sys_admin', 'dept_manager'] }
       },
       {
         path: 'general',
         name: 'GeneralMaterial',
         component: () => import('@/views/GeneralMaterialView.vue'),
-        meta: { title: '2. 普通耗材管理 (主库按需分发)' }
+        meta: { title: '2. 普通耗材管理 (主库按需分发)', roles: ['sys_admin', 'dept_manager'] }
       },
       {
         path: 'high-value',
         name: 'HighValue',
         component: () => import('@/views/HighValueView.vue'),
-        meta: { title: '3. 高值耗材管理 (一物一码专仓)' }
+        meta: { title: '3. 高值耗材管理 (一物一码专仓)', roles: ['sys_admin', 'dept_manager', 'secondary_user'] }
       },
       {
         path: 'secondary',
         name: 'SecondaryWarehouse',
         component: () => import('@/views/SecondaryWarehouseView.vue'),
-        meta: { title: '4. 二级库管理 (临床科室库房)' }
+        meta: { title: '4. 二级库管理 (临床科室库房)', roles: ['sys_admin', 'secondary_user', 'dept_manager'] }
       },
       {
         path: 'logs',
         name: 'WorkflowLog',
         component: () => import('@/views/WorkflowLogView.vue'),
-        meta: { title: '5. 全流程业务链路日志 (6W)' }
+        meta: { title: '5. 全流程业务链路日志 (6W)', roles: ['sys_admin', 'dept_manager', 'finance_auditor'] }
       },
       {
         path: 'finance',
         name: 'FinancePrint',
         component: () => import('@/views/FinancePrintView.vue'),
-        meta: { title: '6. 统计查询与单据打印中心' }
+        meta: { title: '6. 统计查询与单据打印中心', roles: ['sys_admin', 'finance_auditor', 'dept_manager'] }
       },
       {
         path: 'procurement',
         name: 'SupplierPurchase',
         component: () => import('@/views/SupplierPurchaseView.vue'),
-        meta: { title: '7. 多级采购与供应商协同' }
+        meta: { title: '7. 多级采购与供应商协同', roles: ['sys_admin', 'dept_manager', 'supplier_user'] }
       },
       {
         path: 'users',
         name: 'UserManagement',
         component: () => import('@/views/UserManagementView.vue'),
-        meta: { title: '8. 全院人员管理与RBAC权限中心' }
+        meta: { title: '8. 全院人员管理与RBAC权限中心', roles: ['sys_admin'] }
       }
     ]
   }
@@ -104,6 +104,18 @@ router.beforeEach((to, _from, next) => {
   } else if (userStore.isLoggedIn && to.path === '/login') {
     // 已登录状态下访问独立登录页，自动进入工作台
     next({ path: '/dict' });
+  } else if (userStore.isLoggedIn && to.meta.roles && Array.isArray(to.meta.roles)) {
+    // 细粒度岗位角色鉴权：非管理员访问无授权页面强制拦截重定向
+    const currentRole = userStore.currentUser.roleCode;
+    if (currentRole !== 'sys_admin' && !to.meta.roles.includes(currentRole)) {
+      if (currentRole === 'secondary_user') next({ path: '/secondary' });
+      else if (currentRole === 'finance_auditor') next({ path: '/finance' });
+      else if (currentRole === 'supplier_user') next({ path: '/procurement' });
+      else if (currentRole === 'dept_manager') next({ path: '/general' });
+      else next({ path: '/showcase' });
+      return;
+    }
+    next();
   } else {
     next();
   }

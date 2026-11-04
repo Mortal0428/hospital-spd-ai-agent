@@ -215,12 +215,14 @@ export const useUserStore = defineStore('user', {
      */
     async login(account: string, password?: string): Promise<boolean> {
       const trimmedAccount = (account || '').trim();
-      const effectivePwd = password || '123456';
+      const effectivePwd = password || '';
+      if (!trimmedAccount || !effectivePwd) {
+        throw new Error('请输入医护工号及系统访问密码');
+      }
 
       // 映射演示工号 (如 SPD-CONSUMABLE-01 -> mgr_consumable)
       const mappedUsername = this.resolveDemoUsername(trimmedAccount);
 
-      let backendSuccess = false;
       try {
         const resp = await httpPost<BackendLoginResponse>('/auth/login', {
           username: mappedUsername,
@@ -228,7 +230,6 @@ export const useUserStore = defineStore('user', {
         });
 
         if (resp && resp.access_token) {
-          backendSuccess = true;
           this.token = resp.access_token;
           const matched = PRESET_USERS.find((u) => u.username === resp.username);
           const mappedRoleCode =
@@ -244,30 +245,21 @@ export const useUserStore = defineStore('user', {
             deptCode: resp.dept_code,
             deptName: resp.dept_name
           };
+
+          this.isLoggedIn = true;
+          this.syncStorage(true, this.currentUser, this.token);
+          await this.fetchPermissions();
+          return true;
+        } else {
+          throw new Error('认证中心凭证签发异常');
         }
-      } catch (err) {
-        console.warn('后端登录接口暂不可用或账号校验降级，激活高韧性离线演示会话', err);
+      } catch (err: any) {
+        this.isLoggedIn = false;
+        this.token = '';
+        this.syncStorage(false, PRESET_USERS[0], '');
+        const errMsg = err?.response?.data?.detail || err?.message || '医护工号或访问密码不正确，请核对后重试';
+        throw new Error(errMsg);
       }
-
-      if (!backendSuccess) {
-        // 离线/演示环境高韧性降级：匹配预设人员库
-        const matched =
-          PRESET_USERS.find(
-            (u) =>
-              u.username.toLowerCase() === mappedUsername.toLowerCase() ||
-              u.username.toLowerCase() === trimmedAccount.toLowerCase()
-          ) ||
-          PRESET_USERS.find((u) => trimmedAccount.toLowerCase().includes(u.username.toLowerCase())) ||
-          PRESET_USERS[0];
-
-        this.currentUser = { ...matched };
-        this.token = `spd_token_${matched.username}_${Date.now()}`;
-      }
-
-      this.isLoggedIn = true;
-      this.syncStorage(true, this.currentUser, this.token);
-      await this.fetchPermissions();
-      return true;
     },
 
     /**

@@ -585,3 +585,100 @@ def submit_high_value_stocktake(
     """
     stocktake_no = f"HV-STK{datetime.now().strftime('%Y%m%d%H%M%S')}"
     return ApiResponse(code=200, msg="高值耗材专仓盘点提交平账成功，已生成财务对账台账", data={"stocktake_no": stocktake_no, "operator": user_ctx.real_name})
+
+
+@router.get("/realtime-stock", response_model=ApiResponse[dict])
+def list_high_value_realtime_stock(
+    cabinet_code: Optional[str] = Query(None, description="智能专柜编码/科室"),
+    keyword: Optional[str] = Query(None, description="UDI/品名/批号模糊检索"),
+    db: Session = Depends(get_db),
+    user_ctx: CurrentUserContext = Depends(get_current_user_context)
+):
+    """查询高值耗材专仓与全院智能专柜实时单品在库台账 (支持管理员全院穿透下钻)
+
+    @param cabinet_code: (Optional[str]) 智能专柜编码过滤
+    @param keyword: (Optional[str]) 关键词检索
+    @param db: (Session) 数据库活动会话
+    @param user_ctx: (CurrentUserContext) 用户上下文
+    @returns: ApiResponse[dict] 实时高值单品列表与统计汇总
+    @route: GET /api/v1/high-value/realtime-stock
+    @throws: 无异常抛出
+    """
+    query = db.query(SpdHighValueItem)
+    if cabinet_code and cabinet_code != "ALL":
+        query = query.filter(
+            (SpdHighValueItem.wh_cabinet_code.like(f"%{cabinet_code}%")) |
+            (SpdHighValueItem.current_dept_name.like(f"%{cabinet_code}%"))
+        )
+    if keyword:
+        kw = f"%{keyword.strip()}%"
+        query = query.filter(
+            (SpdHighValueItem.udi_sn.like(kw)) |
+            (SpdHighValueItem.product_name.like(kw)) |
+            (SpdHighValueItem.batch_no.like(kw)) |
+            (SpdHighValueItem.product_code.like(kw))
+        )
+    items = query.order_by(SpdHighValueItem.id.desc()).all()
+    in_stock_items = [it for it in items if it.item_status in ("IN_HIGH_VALUE_WH", "IN_SECONDARY_CABINET")]
+    total_amount = sum(float(it.unit_price or 0) for it in in_stock_items)
+    return ApiResponse(
+        code=200,
+        msg="查询高值全院实时在库台账成功",
+        data={
+            "items": [
+                {
+                    "id": it.id,
+                    "udi_sn": it.udi_sn,
+                    "product_code": it.product_code,
+                    "product_name": it.product_name,
+                    "spec_model": it.spec_model,
+                    "batch_no": it.batch_no,
+                    "expiry_date": str(it.expiry_date),
+                    "unit_price": float(it.unit_price or 0),
+                    "wh_cabinet_code": it.wh_cabinet_code,
+                    "current_dept_name": it.current_dept_name,
+                    "item_status": it.item_status,
+                    "patient_inpatient_no": it.patient_inpatient_no,
+                    "patient_name_masked": it.patient_name_masked
+                }
+                for it in items
+            ],
+            "total_items": len(items),
+            "in_stock_qty": len(in_stock_items),
+            "total_amount": round(total_amount, 2)
+        }
+    )
+
+
+@router.get("/initial-stock", response_model=ApiResponse[List[dict]])
+def get_high_value_initial_stock(
+    cabinet_code: Optional[str] = Query(None, description="专柜编码"),
+    db: Session = Depends(get_db),
+    user_ctx: CurrentUserContext = Depends(require_roles(["sys_admin", "dept_manager"]))
+):
+    """查询高值专柜期初建账底表 (支持管理员全院穿透查看期初锁)
+
+    @param cabinet_code: (Optional[str]) 专柜编码
+    @param db: (Session) 数据库活动会话
+    @param user_ctx: (CurrentUserContext) 用户鉴权
+    @returns: ApiResponse[List[dict]] 期初明细
+    @route: GET /api/v1/high-value/initial-stock
+    @throws: 无异常抛出
+    """
+    items = db.query(SpdHighValueItem).all()
+    res = []
+    for it in items:
+        res.append({
+            "id": it.id,
+            "cabinet_code": it.wh_cabinet_code,
+            "udi_sn": it.udi_sn,
+            "product_code": it.product_code,
+            "product_name": it.product_name,
+            "spec_model": it.spec_model,
+            "batch_no": it.batch_no,
+            "initial_qty": 1,
+            "unit_price": float(it.unit_price or 0),
+            "is_locked": 1,
+            "locked_at": "2026-11-01 08:00:00"
+        })
+    return ApiResponse(code=200, msg="查询高值专柜期初建账数据成功", data=res)

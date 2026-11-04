@@ -1272,18 +1272,6 @@ const route = useRoute();
 const router = useRouter();
 const activeTab = ref('requisition');
 
-// 监听路由 Query 切换活动 Tab
-watch(
-  () => route.query.tab,
-  (newTab) => {
-    if (newTab && typeof newTab === 'string') {
-      const target = (newTab === 'dispatch') ? 'outbound' : newTab;
-      activeTab.value = target;
-    }
-  },
-  { immediate: true }
-);
-
 // 列表与加载状态
 const allOrders = ref<InboundOutboundOrder[]>([]);
 const requisitions = ref<any[]>([]);
@@ -2088,12 +2076,39 @@ function handleTabChange(tabName: any) {
   router.replace({ query: { ...route.query, tab: tabName } });
   if (tabName === 'requisition') fetchRequisitions();
   else if (tabName === 'stocktake') fetchMainStocktake();
+  else if (tabName === 'inventory') fetchRealtimeStock();
   else fetchOrders();
 }
 
+// 监听路由 Query 切换活动 Tab 并即时拉取对应数据源，彻底根治静默 No Data
+watch(
+  () => route.query.tab,
+  (newTab) => {
+    if (newTab && typeof newTab === 'string') {
+      const target = (newTab === 'dispatch') ? 'outbound' : newTab;
+      activeTab.value = target;
+      if (target === 'inventory') fetchRealtimeStock();
+      else if (target === 'requisition') fetchRequisitions();
+      else if (target === 'stocktake') fetchMainStocktake();
+      else fetchOrders();
+    }
+  }
+);
+
 onMounted(async () => {
-  fetchRequisitions();
-  fetchOrders();
+  const currentTab = (route.query.tab as string) || 'requisition';
+  const target = (currentTab === 'dispatch') ? 'outbound' : currentTab;
+  activeTab.value = target;
+  if (target === 'inventory') {
+    fetchRealtimeStock();
+  } else if (target === 'requisition') {
+    fetchRequisitions();
+  } else if (target === 'stocktake') {
+    fetchMainStocktake();
+  } else {
+    fetchOrders();
+  }
+
   try {
     const [spRes, supRes] = await Promise.all([listSpecs(), listSuppliers()]);
     allSpecs.value = spRes || [];

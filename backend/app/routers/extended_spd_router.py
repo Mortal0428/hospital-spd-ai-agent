@@ -1553,10 +1553,11 @@ def get_finance_actuarial_reports(
 
 
 # =========================================================================
-# 9. 跨病区应急调拨单 (调出方与调入方双向留存显示)
+# 9. 跨病区应急调拨单 (调出方与调入方双向留存显示与双向审核流转)
 # =========================================================================
 
 class WardTransferRequest(BaseModel):
+    transfer_order_no: Optional[str] = Field(None, description="调拨单号 (前端自动生成，如 TR936...)")
     from_warehouse_code: str = Field(..., description="调出病区二级库编码")
     from_dept_name: str = Field(..., description="调出科室名称")
     to_warehouse_code: str = Field(..., description="调入病区二级库编码")
@@ -1566,12 +1567,18 @@ class WardTransferRequest(BaseModel):
     items: List[dict] = Field(..., min_length=1, description="调拨耗材明细清单")
 
 
+class WardTransferAuditRequest(BaseModel):
+    action: str = Field(..., description="ACCEPT (确认接收增库) | REJECT (驳回拒收退回原库)")
+    auditor_name: str = Field(..., description="接收审核人")
+    audit_remark: Optional[str] = Field(None, description="审核意见或拒收说明")
+
+
 @router.post("/orders/ward-transfer", response_model=ApiResponse[dict])
 def create_ward_transfer_order(
     req: WardTransferRequest,
     db: Session = Depends(get_db)
 ) -> ApiResponse[dict]:
-    """开具临床二级库跨病区应急调拨单 (双方库房台账双向留存，自动增减库存)
+    """开具临床二级库跨病区应急调拨单 (调出方库存预占出库在途，等待调入病区审核接收)
     @param req: WardTransferRequest 调拨双方与明细
     @param db: 数据库会话
     @returns ApiResponse[dict] 调拨单信息
@@ -1579,7 +1586,7 @@ def create_ward_transfer_order(
     @throws HTTPException(400) 当库存不足时抛出
     """
     ts = datetime.now().strftime("%Y%m%d%H%M%S")
-    transfer_order_no = f"TRF{ts}{random.randint(10, 99)}"
+    transfer_order_no = req.transfer_order_no or f"TR936{ts}{random.randint(10, 99)}"
 
     for item in req.items:
         p_code = item.get("spec_code") or item.get("product_code") or "936010900135"
@@ -1588,45 +1595,37 @@ def create_ward_transfer_order(
         qty = int(item.get("quantity") or item.get("qty") or 1)
         u_p = Decimal(str(item.get("unit_price") or 8.7654))
 
-        # 1. 扣减调出科室库存
+        # 1. 扣减/预占调出科室库存
         from_inv = db.query(SpdSecondaryInventory).filter(
             SpdSecondaryInventory.product_code == p_code,
             SpdSecondaryInventory.batch_no == b_no
         ).first()
         if from_inv and from_inv.current_qty >= qty:
             from_inv.current_qty -= qty
+        elif from_inv and from_inv.current_qty < qty:
+            raise HTTPException(status_code=400, detail=f"调出病区库存不足 (当前仅余 {from_inv.current_qty} 件，申请调拨 {qty} 件)")
 
-        # 2. 增加调入科室库存
-        to_inv = db.query(SpdSecondaryInventory).filter(
-            SpdSecondaryInventory.product_code == p_code,
-            SpdSecondaryInventory.batch_no == b_no,
-            SpdSecondaryInventory.dept_name.like(f"%{req.to_dept_name[:2]}%")
-        ).first()
-        if to_inv:
-            to_inv.current_qty += qty
-
-        # 3. 记录调拨单据 (在 SpdStocktakeAndTransferOrder 中记录，同时标注调出与调入)
+        # 2. 记录调拨单据 (状态置为 PENDING_TARGET_RECEIVE，等待目标科室审核)
         order = SpdStocktakeAndTransferOrder(
             order_no=transfer_order_no,
             biz_category="SECONDARY_TRANSFER",
-            warehouse_code=f"{req.from_warehouse_code}->{req.to_warehouse_code}",
+            from_warehouse_code=req.from_warehouse_code,
+            to_warehouse_code=req.to_warehouse_code,
             product_id=1,
             product_code=p_code,
             product_name=p_name,
-            batch_no=b_no,
-            unit_price=u_p,
-            book_qty=qty,
+            book_qty=from_inv.current_qty + qty if from_inv else qty,
             actual_or_transfer_qty=qty,
             diff_qty=0,
-            confirm_stage="SUBMITTED",
+            confirm_stage="PENDING_TARGET_RECEIVE",
             operator_name=req.operator_name,
-            confirmed_by=req.operator_name,
-            confirmed_at=datetime.now(),
-            reason_note=f"[{req.from_dept_name} -> {req.to_dept_name}] {req.reason_note}"
+            confirmed_by=None,
+            confirmed_at=None,
+            reason_note=f"[{req.from_dept_name} -> {req.to_dept_name}] 批号:{b_no} | {req.reason_note}"
         )
         db.add(order)
 
-        # 4. 写入 6W 日志 6_SEC_TRANSFER
+        # 3. 写入 6W 日志 6_SEC_TRANSFER (在途)
         record_workflow_6w_log(
             db=db,
             biz_order_no=transfer_order_no,
@@ -1637,27 +1636,190 @@ def create_ward_transfer_order(
             from_dept_name=req.from_dept_name,
             from_user_name=req.operator_name,
             to_dept_name=req.to_dept_name,
-            to_user_name="科室接收人",
+            to_user_name="目标病区待接收审核人",
             change_qty=qty,
             before_stock_snapshot=from_inv.current_qty + qty if from_inv else qty,
             after_stock_snapshot=from_inv.current_qty if from_inv else 0,
             settlement_amount=u_p * Decimal(str(qty)),
             is_billable=0,
-            audit_remark=f"跨病区应急调拨完成: {req.from_dept_name} -> {req.to_dept_name}"
+            audit_remark=f"跨病区应急调拨已开具，等待目标病区审核接收: {req.from_dept_name} -> {req.to_dept_name}"
         )
 
     db.commit()
 
     return ApiResponse(
         code=200,
-        msg=f"跨病区调拨单[{transfer_order_no}]已成功开具！双方科室均可实时查阅，库存已自动平移",
+        msg=f"跨病区调拨单[{transfer_order_no}]已成功提交！状态为待目标病区审核接收",
         data={
             "transfer_order_no": transfer_order_no,
             "from_warehouse": req.from_warehouse_code,
             "to_warehouse": req.to_warehouse_code,
+            "status": "PENDING_TARGET_RECEIVE",
             "items_count": len(req.items)
         }
     )
+
+
+@router.get("/orders/ward-transfer/list", response_model=ApiResponse[list])
+def list_ward_transfer_orders(
+    warehouse_code: Optional[str] = Query(None, description="病区仓库编码"),
+    confirm_stage: Optional[str] = Query(None, description="状态: PENDING_TARGET_RECEIVE | TRANSFERRED | TRANSFER_REJECTED | ALL"),
+    db: Session = Depends(get_db)
+) -> ApiResponse[list]:
+    """查询跨病区调拨单列表 (包含调出在途与待目标病区审核接收)
+    @param warehouse_code: Optional[str] 仓库编码过滤
+    @param confirm_stage: Optional[str] 状态过滤
+    @param db: 数据库会话
+    @returns ApiResponse[list] 调拨单清单
+    @route GET /api/v1/ext/orders/ward-transfer/list
+    """
+    query = db.query(SpdStocktakeAndTransferOrder).filter(
+        SpdStocktakeAndTransferOrder.biz_category == "SECONDARY_TRANSFER"
+    )
+    if confirm_stage and confirm_stage != "ALL":
+        query = query.filter(SpdStocktakeAndTransferOrder.confirm_stage == confirm_stage)
+    if warehouse_code and warehouse_code != "ALL":
+        query = query.filter(
+            (SpdStocktakeAndTransferOrder.from_warehouse_code == warehouse_code) |
+            (SpdStocktakeAndTransferOrder.to_warehouse_code == warehouse_code)
+        )
+    orders = query.order_by(SpdStocktakeAndTransferOrder.id.desc()).all()
+    res = []
+    for o in orders:
+        res.append({
+            "id": o.id,
+            "order_no": o.order_no,
+            "from_warehouse_code": o.from_warehouse_code,
+            "to_warehouse_code": o.to_warehouse_code,
+            "product_code": o.product_code,
+            "product_name": o.product_name,
+            "transfer_qty": o.actual_or_transfer_qty,
+            "confirm_stage": o.confirm_stage,
+            "operator_name": o.operator_name,
+            "confirmed_by": o.confirmed_by,
+            "confirmed_at": str(o.confirmed_at) if o.confirmed_at else None,
+            "reason_note": o.reason_note,
+            "created_at": str(o.created_at)
+        })
+    return ApiResponse(code=200, msg="查询跨病区调拨单成功", data=res)
+
+
+@router.post("/orders/ward-transfer/{order_no}/audit", response_model=ApiResponse[dict])
+def audit_ward_transfer_order(
+    order_no: str,
+    payload: WardTransferAuditRequest,
+    db: Session = Depends(get_db)
+) -> ApiResponse[dict]:
+    """目标病区审核验收跨病区调入单 (确认接收增库结案，或驳回拒收退回原库)
+    @param order_no: 调拨单号
+    @param payload: 审核动作与审核人
+    @param db: 数据库会话
+    @returns ApiResponse[dict] 审核结果
+    @route POST /api/v1/ext/orders/ward-transfer/{order_no}/audit
+    @throws HTTPException(404) 单据不存在; HTTPException(400) 重复审核
+    """
+    orders = db.query(SpdStocktakeAndTransferOrder).filter(
+        SpdStocktakeAndTransferOrder.order_no == order_no
+    ).all()
+    if not orders:
+        raise HTTPException(status_code=404, detail="调拨单不存在")
+
+    first_order = orders[0]
+    if first_order.confirm_stage != "PENDING_TARGET_RECEIVE":
+        raise HTTPException(status_code=400, detail=f"该单据当前状态为 [{first_order.confirm_stage}]，不可重复审核")
+
+    now = datetime.now()
+    if payload.action == "ACCEPT":
+        # 目标科室审核通过：目标科室增加在库库存
+        for o in orders:
+            o.confirm_stage = "TRANSFERRED"
+            o.confirmed_by = payload.auditor_name
+            o.confirmed_at = now
+
+            target_dept_name = "心内科病区二级库" if "CARDIO" in (o.to_warehouse_code or "") else "骨科病区二级库"
+            target_dept_id = 4 if "CARDIO" in (o.to_warehouse_code or "") else 3
+
+            to_inv = db.query(SpdSecondaryInventory).filter(
+                SpdSecondaryInventory.product_code == o.product_code,
+                SpdSecondaryInventory.dept_id == target_dept_id
+            ).first()
+
+            if to_inv:
+                to_inv.current_qty += o.actual_or_transfer_qty
+            else:
+                to_inv = SpdSecondaryInventory(
+                    dept_id=target_dept_id,
+                    dept_name=target_dept_name,
+                    product_id=o.product_id,
+                    product_code=o.product_code,
+                    product_name=o.product_name,
+                    main_dept_code="CONSUMABLE_DEPT",
+                    batch_no="B2026110301",
+                    expiry_date=date(2029, 12, 31),
+                    current_qty=o.actual_or_transfer_qty,
+                    consumed_qty=0,
+                    unit_price=Decimal("35.50")
+                )
+                db.add(to_inv)
+
+            # 写入 6W 审计日志 (调拨结案)
+            record_workflow_6w_log(
+                db=db,
+                biz_order_no=o.order_no,
+                node_action="6_SEC_TRANSFER",
+                product_code=o.product_code,
+                product_name=o.product_name,
+                batch_or_udi="B2026110301",
+                from_dept_name=o.from_warehouse_code,
+                from_user_name=o.operator_name,
+                to_dept_name=target_dept_name,
+                to_user_name=payload.auditor_name,
+                change_qty=o.actual_or_transfer_qty,
+                before_stock_snapshot=to_inv.current_qty - o.actual_or_transfer_qty,
+                after_stock_snapshot=to_inv.current_qty,
+                settlement_amount=Decimal(str(o.actual_or_transfer_qty)) * Decimal("35.50"),
+                is_billable=0,
+                audit_status="VERIFIED",
+                audit_remark=f"目标病区已审核接收调入物资，入库结案: {payload.audit_remark or '实物外观包装完好'}"
+            )
+        db.commit()
+        return ApiResponse(code=200, msg="调入调拨单已审核通过，已成功验收入库！", data={"order_no": order_no, "status": "TRANSFERRED"})
+    else:
+        # 目标科室驳回拒收：调出方库存原路冲回
+        for o in orders:
+            o.confirm_stage = "TRANSFER_REJECTED"
+            o.confirmed_by = payload.auditor_name
+            o.confirmed_at = now
+            o.reason_note = f"{o.reason_note or ''} [拒收说明: {payload.audit_remark or '实物或单据不符'}]"
+
+            from_inv = db.query(SpdSecondaryInventory).filter(
+                SpdSecondaryInventory.product_code == o.product_code,
+                SpdSecondaryInventory.batch_no == "B2026110301"
+            ).first()
+            if from_inv:
+                from_inv.current_qty += o.actual_or_transfer_qty
+
+            record_workflow_6w_log(
+                db=db,
+                biz_order_no=o.order_no,
+                node_action="6_SEC_TRANSFER",
+                product_code=o.product_code,
+                product_name=o.product_name,
+                batch_or_udi="B2026110301",
+                from_dept_name=o.to_warehouse_code,
+                from_user_name=payload.auditor_name,
+                to_dept_name=o.from_warehouse_code,
+                to_user_name=o.operator_name,
+                change_qty=o.actual_or_transfer_qty,
+                before_stock_snapshot=0,
+                after_stock_snapshot=from_inv.current_qty if from_inv else o.actual_or_transfer_qty,
+                settlement_amount=Decimal("0.00"),
+                is_billable=0,
+                audit_status="REJECTED",
+                audit_remark=f"目标病区驳回调入申请，原路冲回调出方库存: {payload.audit_remark or '包装破损或规格不符'}"
+            )
+        db.commit()
+        return ApiResponse(code=200, msg="调拨单已驳回拒收，调出方在库库存已原路冲回", data={"order_no": order_no, "status": "TRANSFER_REJECTED"})
 
 
 # =========================================================================

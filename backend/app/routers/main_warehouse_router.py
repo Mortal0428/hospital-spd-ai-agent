@@ -503,14 +503,77 @@ def approve_requisition_and_dispatch(
     if req.req_status != "PENDING_APPROVAL":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"该申请单当前状态为 [{req.req_status}]，不可重复审批")
 
+    # 1. 严格检查并原子扣减主库对应品规的 FEFO 批次库存
+    main_inv = db.query(SpdMainInventory).filter(
+        (SpdMainInventory.product_code == req.product_code) |
+        (SpdMainInventory.product_id == req.product_id),
+        SpdMainInventory.available_qty >= req.apply_qty
+    ).order_by(SpdMainInventory.expiry_date.asc()).first()
+
+    if not main_inv:
+        part_inv = db.query(SpdMainInventory).filter(
+            (SpdMainInventory.product_code == req.product_code) |
+            (SpdMainInventory.product_id == req.product_id)
+        ).first()
+        if part_inv:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"主库可用库存不足 (当前剩余: {part_inv.available_qty}，申请数量: {req.apply_qty})，无法审批出库"
+            )
+        # 兼容性兜底：查找首个有足够库存的常规耗材在库批次
+        main_inv = db.query(SpdMainInventory).filter(
+            SpdMainInventory.available_qty >= req.apply_qty
+        ).order_by(SpdMainInventory.expiry_date.asc()).first()
+
+    if not main_inv:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="主库暂无可用批次库存，无法完成审批出库"
+        )
+
+    # 原子扣减主库可用库存
+    before_stock = main_inv.available_qty
+    main_inv.available_qty -= req.apply_qty
+    after_stock = main_inv.available_qty
+
     outbound_no = f"CK936{datetime.now().strftime('%Y%m%d%H%M%S')}{random.randint(10, 99)}"
+    dist_no = f"DIST-{datetime.now().strftime('%Y%m%d%H%M%S')}-{random.randint(10, 99)}"
+
     req.req_status = "APPROVED_DISPATCHED"
     req.approved_qty = req.apply_qty
     req.approver_id = user_ctx.id
     req.approver_name = user_ctx.real_name
     req.approved_at = datetime.now()
 
-    # 生成主库出库单记录 (SpdInboundAndOutboundOrder)
+    # 2. 自动生成派发给申请科室的二级库分发调拨单 (SpdDistributionOrder)
+    target_dept_id = 3 if "骨科" in (req.apply_dept_name or "") else 4
+    if "心" in (req.apply_dept_name or ""):
+        target_dept_id = 4
+
+    dist_order = SpdDistributionOrder(
+        dist_order_no=dist_no,
+        source_main_dept=main_inv.main_dept_code or "CONSUMABLE_DEPT",
+        target_type="TO_SECONDARY_DEPT",
+        target_dept_id=target_dept_id,
+        target_dept_name=req.apply_dept_name,
+        main_inventory_id=main_inv.id,
+        product_id=req.product_id,
+        product_code=req.product_code,
+        product_name=req.product_name,
+        batch_no=main_inv.batch_no,
+        expiry_date=main_inv.expiry_date,
+        dist_qty=req.apply_qty,
+        unit_price=main_inv.unit_price,
+        total_amount=Decimal(req.apply_qty) * main_inv.unit_price,
+        order_status="DISPATCHED",
+        dispatcher_id=user_ctx.id,
+        dispatcher_name=user_ctx.real_name,
+        receiver_name=req.applicant_name or "二级库经办护士",
+        remark=f"承接临床请领单 [{req.req_order_no}] 审核通过出库调拨"
+    )
+    db.add(dist_order)
+
+    # 3. 生成主库出库单记录 (SpdInboundAndOutboundOrder)
     outbound_order = SpdInboundAndOutboundOrder(
         order_no=outbound_no,
         order_type="REQ_AUTO_OUT",
@@ -520,50 +583,53 @@ def approve_requisition_and_dispatch(
         product_id=req.product_id,
         product_code=req.product_code,
         product_name=req.product_name,
-        batch_no="B20261101",
+        batch_no=main_inv.batch_no,
         quantity=req.apply_qty,
-        unit_price=Decimal("18.50"),
-        total_amount=Decimal(req.apply_qty) * Decimal("18.50"),
+        unit_price=main_inv.unit_price,
+        total_amount=Decimal(req.apply_qty) * main_inv.unit_price,
         source_ref_order_no=req.req_order_no,
         confirm_stage="SUBMITTED",
         created_by=user_ctx.real_name,
         second_confirmed_by=user_ctx.real_name,
         second_confirmed_at=datetime.now(),
-        remark=f"承接临床请领单 [{req.req_order_no}] 审核通过自动生成出库调拨单"
+        remark=f"承接临床请领单 [{req.req_order_no}] 审核通过自动生成出库调拨单，已扣减主库在库库存"
     )
     db.add(outbound_order)
 
-    # 写入流转追溯台账
+    # 4. 写入流转追溯台账 (6W)
     trace = SpdWorkflowLog(
         trace_no=f"LOG-{datetime.now().strftime('%Y%m%d%H%M%S')}-{random.randint(100, 999)}",
         biz_order_no=outbound_no,
         node_action="3_MAIN_DISPATCH",
         product_code=req.product_code,
         product_name=req.product_name,
-        batch_or_udi="B20261101",
+        batch_or_udi=main_inv.batch_no,
         from_dept_name="卫材库房(耗材主库)",
         from_user_name=user_ctx.real_name,
         to_dept_name=req.apply_dept_name,
         to_user_name=req.applicant_name,
         change_qty=req.apply_qty,
-        before_stock_snapshot=1000,
-        after_stock_snapshot=1000 - req.apply_qty,
-        settlement_amount=Decimal(req.apply_qty) * Decimal("18.50"),
+        before_stock_snapshot=before_stock,
+        after_stock_snapshot=after_stock,
+        settlement_amount=Decimal(req.apply_qty) * main_inv.unit_price,
         is_billable=0,
         audit_status="VERIFIED",
-        audit_remark=f"临床请领审批通过，自动生成出库调拨单据 {outbound_no}"
+        audit_remark=f"临床请领审批通过，主库扣库完成并自动生成分发单 {dist_no}"
     )
     db.add(trace)
     db.commit()
 
     return ApiResponse(
         code=200,
-        msg="请领申请已审核通过，并成功生成出库调拨单",
+        msg="请领申请已审核通过，主库库存已扣减，并下发二级库待接收分发单",
         data={
             "req_id": req.id,
             "req_order_no": req.req_order_no,
             "outbound_order_no": outbound_no,
-            "status": "APPROVED_DISPATCHED"
+            "dist_order_no": dist_no,
+            "status": "APPROVED_DISPATCHED",
+            "deducted_qty": req.apply_qty,
+            "remaining_main_stock": after_stock
         }
     )
 

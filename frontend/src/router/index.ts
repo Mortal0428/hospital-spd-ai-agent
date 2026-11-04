@@ -64,15 +64,21 @@ const routes: RouteRecordRaw[] = [
       },
       {
         path: 'procurement',
-        name: 'SupplierPurchase',
-        component: () => import('@/views/SupplierPurchaseView.vue'),
-        meta: { title: '7. 多级采购与供应商协同', roles: ['sys_admin', 'dept_manager', 'supplier_user'] }
+        name: 'HospitalProcurement',
+        component: () => import('@/views/HospitalProcurementView.vue'),
+        meta: { title: '7. 采购管理与准入中心', roles: ['sys_admin', 'dept_manager', 'secondary_user'] }
+      },
+      {
+        path: 'supplier-portal',
+        name: 'ExternalSupplierPortal',
+        component: () => import('@/views/ExternalSupplierPortalView.vue'),
+        meta: { title: '8. 外部供应商协同门户', roles: ['sys_admin', 'supplier_user'] }
       },
       {
         path: 'users',
         name: 'UserManagement',
         component: () => import('@/views/UserManagementView.vue'),
-        meta: { title: '8. 全院人员管理与RBAC权限中心', roles: ['sys_admin'] }
+        meta: { title: '9. 全院人员管理与RBAC权限中心', roles: ['sys_admin'] }
       }
     ]
   }

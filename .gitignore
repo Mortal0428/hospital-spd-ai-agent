@@ -38,6 +38,7 @@ frontend/dist-ssr/
 .env.local
 .env.*.local
 backend/.env
+backend/reset_test_sup.py
 
 # Vector DB & Local Storage Cache
 chroma_data/

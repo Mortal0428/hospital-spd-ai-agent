@@ -462,39 +462,79 @@
           </div>
         </div>
 
-        <!-- 7. 采购与外部协同 -->
-        <div v-if="canViewSupplierPurchase" class="nav-tree-group">
+        <!-- 7. 医院采购管理与准入中心 (医院内控端) -->
+        <div v-if="canViewHospitalProcurement" class="nav-tree-group">
           <div
             class="side-nav-item parent-item"
             :class="{ active: currentPath === '/procurement' && !currentTab }"
-            @click="toggleGroup('supplier', '/procurement')"
+            @click="toggleGroup('hospitalProc', '/procurement')"
           >
-            <SvgIcon name="upload" :size="16" />
-            <span v-show="isExpanded" class="item-title">采购与外部协同</span>
-            <span v-show="isExpanded" class="side-badge">准入</span>
-            <span v-show="isExpanded" class="chevron-arrow" :class="{ 'is-open': expandedGroups.supplier }">▾</span>
+            <SvgIcon name="package" :size="16" />
+            <span v-show="isExpanded" class="item-title">采购管理与准入</span>
+            <span v-show="isExpanded" class="side-badge">内控</span>
+            <span v-show="isExpanded" class="chevron-arrow" :class="{ 'is-open': expandedGroups.hospitalProc }">▾</span>
           </div>
-          <div v-show="isExpanded && expandedGroups.supplier" class="sub-nav-list">
+          <div v-show="isExpanded && expandedGroups.hospitalProc" class="sub-nav-list">
             <div
               class="sub-nav-item"
-              :class="{ active: currentPath === '/procurement' && (!currentTab || currentTab === 'orders') }"
-              @click="navigateMenu('/procurement', 'orders')"
+              :class="{ active: currentPath === '/procurement' && (!currentTab || currentTab === 'plans') }"
+              @click="navigateMenu('/procurement', 'plans')"
             >
               <span class="sub-dot" />
-              <span>采购订单管理</span>
+              <span>采购计划与审批</span>
             </div>
             <div
               class="sub-nav-item"
-              :class="{ active: currentPath === '/procurement' && currentTab === 'delivery' }"
-              @click="navigateMenu('/procurement', 'delivery')"
+              :class="{ active: currentPath === '/procurement' && currentTab === 'suppliers' }"
+              @click="navigateMenu('/procurement', 'suppliers')"
             >
               <span class="sub-dot" />
-              <span>供应商发货协同</span>
+              <span>供应商资质审查</span>
+            </div>
+            <div
+              class="sub-nav-item"
+              :class="{ active: currentPath === '/procurement' && currentTab === 'tracking' }"
+              @click="navigateMenu('/procurement', 'tracking')"
+            >
+              <span class="sub-dot" />
+              <span>采供履约与入库</span>
             </div>
           </div>
         </div>
 
-        <!-- 8. 系统与人员管理 (sys_admin 专享 RBAC 一体化) -->
+        <!-- 8. 外部供应商协同门户 (B2B 外部端) -->
+        <div v-if="canViewSupplierPortal" class="nav-tree-group">
+          <div
+            class="side-nav-item parent-item"
+            :class="{ active: currentPath === '/supplier-portal' && !currentTab }"
+            @click="toggleGroup('supplierPortal', '/supplier-portal')"
+          >
+            <SvgIcon name="upload" :size="16" />
+            <span v-show="isExpanded" class="item-title">外部供应商协同</span>
+            <span v-show="isExpanded" class="side-badge">协同</span>
+            <span v-show="isExpanded" class="chevron-arrow" :class="{ 'is-open': expandedGroups.supplierPortal }">▾</span>
+          </div>
+          <div v-show="isExpanded && expandedGroups.supplierPortal" class="sub-nav-list">
+            <div
+              class="sub-nav-item"
+              :class="{ active: currentPath === '/supplier-portal' && (!currentTab || currentTab === 'orders') }"
+              @click="navigateMenu('/supplier-portal', 'orders')"
+            >
+              <span class="sub-dot" />
+              <span>在线配货发货</span>
+            </div>
+            <div
+              class="sub-nav-item"
+              :class="{ active: currentPath === '/supplier-portal' && currentTab === 'reconcile' }"
+              @click="navigateMenu('/supplier-portal', 'reconcile')"
+            >
+              <span class="sub-dot" />
+              <span>采供月度对账</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 9. 系统与人员管理 (sys_admin 专享 RBAC 一体化) -->
         <div v-if="canViewUsers" class="nav-tree-group">
           <div
             class="side-nav-item parent-item"
@@ -674,7 +714,8 @@ const expandedGroups = ref<Record<string, boolean>>({
   secondary: true,
   finance: false,
   logs: false,
-  supplier: false,
+  hospitalProc: false,
+  supplierPortal: false,
   users: false
 });
 
@@ -758,9 +799,9 @@ const canViewHighValue = computed(() => (
 const canViewSecondaryWarehouse = computed(() => userStore.canAction('SEC_WAREHOUSE', 'can_view'));
 const canViewWorkflowLog = computed(() => userStore.canAction('WORKFLOW_LOG', 'can_view'));
 const canViewFinancePrint = computed(() => userStore.canAction('FINANCE_AUDIT', 'can_view'));
-const canViewSupplierPurchase = computed(() => (
-  userStore.canAction('SUPPLIER_SHIP', 'can_view') ||
-  (userStore.canAction('PURCHASE_PLAN', 'can_view') && userStore.currentUser.roleCode !== 'secondary_user')
+const canViewHospitalProcurement = computed(() => userStore.currentUser.roleCode !== 'supplier_user');
+const canViewSupplierPortal = computed(() => (
+  userStore.currentUser.roleCode === 'supplier_user' || userStore.currentUser.roleCode === 'sys_admin'
 ));
 const canViewUsers = computed(() => userStore.currentUser.roleCode === 'sys_admin');
 
@@ -875,7 +916,7 @@ async function handleDoSwitchUser(target: any) {
   } else if (roleCode === 'finance_auditor') {
     router.push('/finance');
   } else if (roleCode === 'supplier_user') {
-    router.push('/procurement');
+    router.push('/supplier-portal');
   } else if (roleCode === 'dept_manager') {
     userStore.setCurrentWarehouse('WH_WEICAI');
     router.push('/general');

@@ -213,14 +213,14 @@
         </el-tab-pane>
 
         <!-- =====================================================================
-             Tab 2: 各临床二级库科室消耗成本核算台账
+             Tab 2: 各临床二级库科室消耗成本核算台账 (支持物料级展开与四级穿透)
              ===================================================================== -->
         <el-tab-pane label="科室领用与消耗支出对账" name="dept-cost">
           <div class="tab-content-area">
             <div class="pane-action-bar">
               <div class="action-desc-text">
                 <SvgIcon name="scale" :size="15" color="var(--accent-primary)" />
-                <span>各临床病区耗材成本核算月度台账 · 移库不计费 · 消耗即结算两阶段财务入账</span>
+                <span>各临床病区耗材成本核算月度台账 · 点击行展开查看物料级消耗明细 · 移库不计费 · 终端核销结算</span>
               </div>
               <div class="action-btn-group">
                 <button class="spd-btn btn-primary" @click="fetchDeptConsumption">
@@ -230,29 +230,87 @@
               </div>
             </div>
 
-            <el-table :data="deptCostList" border stripe class="fusion-styled-table" v-loading="loadingDeptCost">
-              <el-table-column prop="dept_name" label="临床核算科室" width="180">
+            <el-table
+              :data="deptCostList"
+              border
+              stripe
+              class="fusion-styled-table"
+              v-loading="loadingDeptCost"
+              row-key="dept_code"
+              @expand-change="handleDeptExpandChange"
+            >
+              <!-- 第一列：物料级展开子行 -->
+              <el-table-column type="expand">
+                <template #default="{ row }">
+                  <div style="padding: 10px 14px; background: rgba(15, 23, 42, 0.4); border-radius: 6px; margin: 4px 6px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                      <span class="font-bold text-accent" style="font-size: 12.5px;">
+                        【{{ row.dept_name }}】本期真实消耗物资明细清单 (四级物料穿透)
+                      </span>
+                      <span class="font-mono text-muted" style="font-size: 11.5px;">
+                        共 {{ row.materials ? row.materials.length : 0 }} 项消耗明细 · 关联住院号与经办护士
+                      </span>
+                    </div>
+
+                    <el-table :data="row.materials || []" size="small" border stripe class="nested-fusion-table">
+                      <el-table-column type="index" label="#" width="45" align="center" />
+                      <el-table-column prop="product_code" label="物料代码" width="130" class-name="font-mono" />
+                      <el-table-column prop="product_name" label="耗材品名" min-width="160" show-overflow-tooltip />
+                      <el-table-column prop="material_type" label="物资分类" width="100" align="center">
+                        <template #default="{ row: item }">
+                          <span :class="item.material_type === '植介入高值' ? 'status-chip chip-warn' : 'status-chip chip-info'">
+                            {{ item.material_type }}
+                          </span>
+                        </template>
+                      </el-table-column>
+                      <el-table-column prop="spec_model" label="规格型号" width="130" show-overflow-tooltip />
+                      <el-table-column prop="batch_no" label="生产批次" width="115" class-name="font-mono" />
+                      <el-table-column prop="expiry_date" label="有效期至" width="105" class-name="font-mono tabular-nums" />
+                      <el-table-column prop="unit_price" label="核算单价" width="95" align="right">
+                        <template #default="{ row: item }">
+                          <span class="font-mono">¥ {{ Number(item.unit_price || 0).toFixed(2) }}</span>
+                        </template>
+                      </el-table-column>
+                      <el-table-column prop="quantity" label="消耗数量" width="85" align="right">
+                        <template #default="{ row: item }">
+                          <strong class="font-mono text-primary">{{ item.quantity }}</strong>
+                        </template>
+                      </el-table-column>
+                      <el-table-column prop="total_amount" label="消耗金额" width="110" align="right">
+                        <template #default="{ row: item }">
+                          <span class="font-mono font-bold text-accent">¥ {{ Number(item.total_amount || 0).toFixed(2) }}</span>
+                        </template>
+                      </el-table-column>
+                      <el-table-column prop="operator_name" label="经办人" width="110" show-overflow-tooltip />
+                      <el-table-column prop="patient_info" label="病案 / 领用说明" min-width="170" show-overflow-tooltip />
+                      <el-table-column prop="created_at" label="记账时间" width="140" class-name="font-mono tabular-nums" />
+                    </el-table>
+                  </div>
+                </template>
+              </el-table-column>
+
+              <el-table-column prop="dept_name" label="临床核算科室" width="160">
                 <template #default="{ row }">
                   <strong>{{ row.dept_name }}</strong>
                 </template>
               </el-table-column>
-              <el-table-column prop="dept_code" label="科室编码" width="140" class-name="font-mono tabular-nums" />
-              <el-table-column prop="gen_cost" label="普通耗材消耗金额" width="160" align="right">
+              <el-table-column prop="dept_code" label="科室编码" width="110" class-name="font-mono tabular-nums" />
+              <el-table-column prop="gen_cost" label="普通耗材消耗金额" width="150" align="right">
                 <template #default="{ row }">
                   <span class="font-mono tabular-nums">¥ {{ Number(row.gen_cost || 0).toFixed(2) }}</span>
                 </template>
               </el-table-column>
-              <el-table-column prop="hv_cost" label="高值耗材核销金额" width="160" align="right">
+              <el-table-column prop="hv_cost" label="高值耗材核销金额" width="150" align="right">
                 <template #default="{ row }">
                   <span class="font-mono tabular-nums text-warn font-bold">¥ {{ Number(row.hv_cost || 0).toFixed(2) }}</span>
                 </template>
               </el-table-column>
-              <el-table-column prop="total_cost" label="科室耗材消耗合计" width="170" align="right">
+              <el-table-column prop="total_cost" label="科室耗材消耗合计" width="160" align="right">
                 <template #default="{ row }">
                   <span class="font-mono tabular-nums text-accent font-bold">¥ {{ Number(row.total_cost || 0).toFixed(2) }}</span>
                 </template>
               </el-table-column>
-              <el-table-column prop="ratio" label="百元医疗收入耗占比" width="170" align="center">
+              <el-table-column prop="ratio" label="百元医疗收入耗占比" width="150" align="center">
                 <template #default="{ row }">
                   <span class="status-chip chip-active font-mono">{{ row.ratio }}</span>
                 </template>
@@ -264,7 +322,7 @@
                     class="mini-btn-link"
                     @click="openDeptCostPrint(row)"
                   >
-                    打印单据
+                    四联单据打印
                   </button>
                 </template>
               </el-table-column>
@@ -339,6 +397,108 @@
             </el-table>
           </div>
         </el-tab-pane>
+
+        <!-- =====================================================================
+             Tab 4: 多级小仓库资金运转流水总台账 (按小仓下钻与分类分页)
+             ===================================================================== -->
+        <el-tab-pane label="多级小仓库资金运转流水总台账" name="sub-flows">
+          <div class="tab-content-area">
+            <div class="pane-action-bar">
+              <div class="action-desc-text">
+                <SvgIcon name="package" :size="15" color="var(--accent-primary)" />
+                <span>全院各级小仓库资金流水全景审计 · 支持调入/发料/病区调拨/患者核销六大流向穿透</span>
+              </div>
+              <div class="action-btn-group">
+                <el-select v-model="subFlowWarehouse" size="small" placeholder="切换核算小仓库" style="width: 170px;" @change="fetchSubWarehouseFlows">
+                  <el-option label="全部授权仓库汇总" value="ALL" />
+                  <el-option label="骨科病区二级库" value="WH_SEC_ORTHO" />
+                  <el-option label="心内科病区二级库" value="WH_SEC_CARDIO" />
+                  <el-option label="卫材库房 (耗材主仓)" value="WH_WEICAI" />
+                  <el-option label="设备库房 (配件专库)" value="WH_EQUIP" />
+                </el-select>
+
+                <el-select v-model="subFlowType" size="small" placeholder="流向类型" style="width: 140px;" @change="fetchSubWarehouseFlows">
+                  <el-option label="全部资金流向" value="ALL" />
+                  <el-option label="主库调拨调入" value="INBOUND_DISPATCH" />
+                  <el-option label="科室发料出库" value="MANUAL_OUT" />
+                  <el-option label="跨病区调拨划转" value="WARD_TRANSFER" />
+                  <el-option label="患者扫码核销" value="PATIENT_VERIFIED" />
+                  <el-option label="退给供应商红字" value="RETURN_SUPPLIER" />
+                </el-select>
+
+                <el-input
+                  v-model="subFlowKeyword"
+                  size="small"
+                  placeholder="品名/代码/批号/单号..."
+                  style="width: 170px;"
+                  clearable
+                  @keyup.enter="fetchSubWarehouseFlows"
+                />
+
+                <el-button plain size="small" @click="fetchSubWarehouseFlows">
+                  <SvgIcon name="refresh" :size="13" style="margin-right: 4px;" />
+                  刷新流水
+                </el-button>
+
+                <el-button type="primary" size="small" @click="printCurrentSubFlows">
+                  <SvgIcon name="print" :size="13" style="margin-right: 4px;" />
+                  打印小仓流转凭证
+                </el-button>
+              </div>
+            </div>
+
+            <!-- 小仓库流水表格 -->
+            <el-table :data="subFlowList" border stripe size="small" class="fusion-styled-table" v-loading="loadingSubFlows">
+              <el-table-column type="index" label="序号" width="50" align="center" />
+              <el-table-column prop="voucher_no" label="业务流水单号" width="165" class-name="font-mono font-bold text-accent" />
+              <el-table-column prop="warehouse_name" label="所属小仓库" width="140" show-overflow-tooltip />
+              <el-table-column prop="flow_type_label" label="资金流向类型" width="130" align="center">
+                <template #default="{ row }">
+                  <span v-if="row.flow_type === 'INBOUND_DISPATCH'" class="status-chip chip-active">{{ row.flow_type_label }}</span>
+                  <span v-else-if="row.flow_type === 'PATIENT_VERIFIED'" class="status-chip chip-warn">{{ row.flow_type_label }}</span>
+                  <span v-else-if="row.flow_type === 'WARD_TRANSFER'" class="status-chip chip-info">{{ row.flow_type_label }}</span>
+                  <span v-else class="status-chip chip-locked">{{ row.flow_type_label }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="product_code" label="物料代码" width="125" class-name="font-mono" />
+              <el-table-column prop="product_name" label="耗材品名" min-width="160" show-overflow-tooltip />
+              <el-table-column prop="spec_model" label="规格型号" width="120" show-overflow-tooltip />
+              <el-table-column prop="batch_no" label="批次/UDI" width="125" class-name="font-mono" show-overflow-tooltip />
+              <el-table-column prop="unit_price" label="核算单价" width="95" align="right">
+                <template #default="{ row }">
+                  <span class="font-mono">¥ {{ Number(row.unit_price || 0).toFixed(2) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="quantity" label="数量" width="80" align="right">
+                <template #default="{ row }">
+                  <strong class="font-mono tabular-nums text-primary">{{ row.quantity }}</strong>
+                </template>
+              </el-table-column>
+              <el-table-column prop="total_amount" label="流水金额" width="115" align="right">
+                <template #default="{ row }">
+                  <span class="font-mono font-bold text-accent">¥ {{ Number(row.total_amount || 0).toFixed(2) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="source_dept" label="调出/来源仓" width="120" show-overflow-tooltip />
+              <el-table-column prop="target_dept" label="调入/患者病区" width="130" show-overflow-tooltip />
+              <el-table-column prop="operator_name" label="经办护士/人" width="100" align="center" />
+              <el-table-column prop="created_at" label="发生时间" width="145" class-name="font-mono tabular-nums" />
+            </el-table>
+
+            <!-- 小仓库流水分页条 -->
+            <div class="pagination-footer" style="display: flex; justify-content: flex-end; padding: 12px 0 4px;">
+              <el-pagination
+                v-model:current-page="subFlowCurrentPage"
+                v-model:page-size="subFlowPageSize"
+                :page-sizes="[10, 20, 50]"
+                layout="total, sizes, prev, pager, next, jumper"
+                :total="subFlowTotal"
+                @current-change="fetchSubWarehouseFlows"
+                @size-change="fetchSubWarehouseFlows"
+              />
+            </div>
+          </div>
+        </el-tab-pane>
       </el-tabs>
     </div>
 
@@ -356,6 +516,7 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { httpGet } from '@/api/request';
+import { getDeptMaterialDetails, getSubWarehouseFlows } from '@/api/orderApi';
 import {
   getMainDispatchReconciliation,
   getDeptConsumptionReconciliation,
@@ -398,6 +559,16 @@ const balanceWarehouseList = ref<any[]>([]);
 const loadingDispatch = ref(false);
 const loadingDeptCost = ref(false);
 const loadingBalance = ref(false);
+
+// 小仓库资金运转流水总账状态
+const subFlowWarehouse = ref('ALL');
+const subFlowType = ref('ALL');
+const subFlowKeyword = ref('');
+const subFlowCurrentPage = ref(1);
+const subFlowPageSize = ref(10);
+const subFlowTotal = ref(0);
+const subFlowList = ref<any[]>([]);
+const loadingSubFlows = ref(false);
 
 const printModalVisible = ref(false);
 const voucherTitle = ref('医疗物资单据');
@@ -503,6 +674,90 @@ async function fetchInventoryBalance() {
 }
 
 /**
+ * 获取多级小仓库资金运转流水总台账
+ */
+async function fetchSubWarehouseFlows() {
+  loadingSubFlows.value = true;
+  try {
+    const res = await getSubWarehouseFlows({
+      warehouse_code: subFlowWarehouse.value,
+      flow_type: subFlowType.value,
+      keyword: subFlowKeyword.value,
+      page: subFlowCurrentPage.value,
+      page_size: subFlowPageSize.value
+    });
+    subFlowList.value = res.items || [];
+    subFlowTotal.value = res.total || 0;
+  } catch (err: any) {
+    ElMessage.error(err.message || '获取小仓库资金流水失败');
+  } finally {
+    loadingSubFlows.value = false;
+  }
+}
+
+/**
+ * 科室领用对账表格展开子行事件监听（懒加载科室物料级真实消耗明细）
+ */
+async function handleDeptExpandChange(row: any, expandedRows: any[]) {
+  const isExpanded = expandedRows.some((r) => r.dept_code === row.dept_code);
+  if (isExpanded && (!row.materials || row.materials.length === 0)) {
+    try {
+      const res = await getDeptMaterialDetails({
+        dept_code: row.dept_code,
+        dept_name: row.dept_name
+      });
+      row.materials = res || [];
+    } catch {
+      row.materials = [];
+    }
+  }
+}
+
+/**
+ * 打印小仓库流转凭证
+ */
+function printCurrentSubFlows() {
+  voucherTitle.value = '二级小仓库物资流转核算凭证';
+  const ts = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+  const items = subFlowList.value.slice(0, 5).map((f) => ({
+    product_code: f.product_code,
+    product_name: f.product_name,
+    spec_name: f.spec_model || '标准规格',
+    model_name: f.flow_type_label,
+    batch_no: f.batch_no,
+    pricing_unit: '件',
+    quantity: f.quantity,
+    unit_price: f.unit_price,
+    total_amount: f.total_amount
+  }));
+  const totalAmt = items.reduce((sum, item) => sum + item.total_amount, 0);
+
+  sampleOrderData.value = {
+    order_no: `SUB-FLOW-${ts}`,
+    target_dept_or_supplier: subFlowWarehouse.value === 'WH_SEC_ORTHO' ? '骨科病区二级库' : '临床二级库综合对账',
+    warehouse_code: subFlowWarehouse.value === 'ALL' ? '全院二级小仓流转中心' : subFlowWarehouse.value,
+    created_by: userStore.currentUser.realName,
+    approver_name: '孙丽娟 (财务主管)',
+    second_confirmed_by: '科室责任护士/主刀 (联签)',
+    total_amount: totalAmt,
+    items: items.length > 0 ? items : [
+      {
+        product_code: 'PROD-GEN-001',
+        product_name: '一次性使用无菌注射器带针',
+        spec_name: '5ml',
+        model_name: '常规发料出库',
+        batch_no: 'B20261101',
+        pricing_unit: '支',
+        quantity: 100,
+        unit_price: 0.45,
+        total_amount: 45.0
+      }
+    ]
+  };
+  printModalVisible.value = true;
+}
+
+/**
  * 标签页切换响应
  * @param tabName 目标标签页标识
  * @returns void
@@ -514,10 +769,12 @@ function handleTabChange(tabName: any) {
   if (tabName === 'main-dispatch') queryTab = 'main-reconciliation';
   if (tabName === 'dept-cost') queryTab = 'dept-reconciliation';
   if (tabName === 'balance') queryTab = 'monthly-balance';
+  if (tabName === 'sub-flows') queryTab = 'sub-flows';
   router.replace({ query: { ...route.query, tab: queryTab } });
   if (tabName === 'main-dispatch') fetchMainDispatchReconcile();
   else if (tabName === 'dept-cost') fetchDeptConsumption();
   else if (tabName === 'balance') fetchInventoryBalance();
+  else if (tabName === 'sub-flows') fetchSubWarehouseFlows();
 }
 
 /**
@@ -806,22 +1063,45 @@ function openRowPrint(row: Record<string, any>): void {
  * @route internal://FinancePrintView/openDeptCostPrint
  * @throws 无异常抛出
  */
-function openDeptCostPrint(row: Record<string, any>): void {
+async function openDeptCostPrint(row: Record<string, any>): Promise<void> {
   voucherTitle.value = `${row.dept_name}月度耗材财务消耗结算单`;
   const ts = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
   const genCost = Number(row.gen_cost) || 12400.0;
   const hvCost = Number(row.hv_cost) || 85000.0;
   const totalCost = Number(row.total_cost) || (genCost + hvCost);
 
-  sampleOrderData.value = {
-    order_no: `JS-${row.dept_code}-${ts}`,
-    target_dept_or_supplier: `${row.dept_name} (${row.dept_code}) · 百元医疗收入耗占比: ${row.ratio || '8.5%'}`,
-    warehouse_code: '全院二级库临床消耗核算中心',
-    total_amount: totalCost,
-    created_by: '孙丽娟 (财务成本会计)',
-    approver_name: '孙丽娟 (财务主管核准)',
-    second_confirmed_by: `${row.dept_name}护士长/科主任`,
-    items: [
+  // 尝试获取科室物料级真实穿透明细
+  let matItems = row.materials || [];
+  if (matItems.length === 0) {
+    try {
+      const res = await getDeptMaterialDetails({
+        dept_code: row.dept_code,
+        dept_name: row.dept_name
+      });
+      if (res && res.length > 0) {
+        matItems = res;
+        row.materials = res;
+      }
+    } catch {
+      // 容错降级
+    }
+  }
+
+  let formattedItems: any[] = [];
+  if (matItems && matItems.length > 0) {
+    formattedItems = matItems.map((m: any) => ({
+      product_code: m.product_code || `${row.dept_code}-M`,
+      product_name: m.product_name,
+      spec_name: m.spec_model || '标准规格',
+      model_name: m.patient_info ? `患者:${m.patient_info}` : (m.operator ? `领用:${m.operator}` : '常规消耗'),
+      batch_no: m.batch_no || 'BATCH-2026',
+      pricing_unit: m.unit || '件',
+      quantity: m.quantity || 1,
+      unit_price: m.unit_price || 0,
+      total_amount: m.total_amount || 0
+    }));
+  } else {
+    formattedItems = [
       {
         product_code: `${row.dept_code}-GEN`,
         product_name: `${row.dept_name}普通医疗耗材月度消耗汇总`,
@@ -844,7 +1124,18 @@ function openDeptCostPrint(row: Record<string, any>): void {
         unit_price: hvCost,
         total_amount: hvCost
       }
-    ]
+    ];
+  }
+
+  sampleOrderData.value = {
+    order_no: `JS-${row.dept_code}-${ts}`,
+    target_dept_or_supplier: `${row.dept_name} (${row.dept_code}) · 百元医疗收入耗占比: ${row.ratio || '8.5%'}`,
+    warehouse_code: '全院二级库临床消耗核算中心',
+    total_amount: totalCost,
+    created_by: '孙丽娟 (财务成本会计)',
+    approver_name: '孙丽娟 (财务主管核准)',
+    second_confirmed_by: `${row.dept_name}护士长/科主任`,
+    items: formattedItems
   };
   printModalVisible.value = true;
 }
@@ -883,6 +1174,7 @@ onMounted(() => {
   fetchMainDispatchReconcile();
   fetchDeptConsumption();
   fetchInventoryBalance();
+  fetchSubWarehouseFlows();
 });
 </script>
 

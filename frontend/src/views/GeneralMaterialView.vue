@@ -235,6 +235,62 @@
               </div>
             </div>
 
+            <!-- 专属看板：待验收供应商到货送货单看板 (闭环承接采供协同发货) -->
+            <div class="pending-supplier-delivery-card" style="margin-bottom: 14px; background: rgba(56, 189, 248, 0.05); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 8px; padding: 12px 14px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <SvgIcon name="package" :size="16" color="var(--accent-primary)" />
+                  <span class="font-bold" style="font-size: 13px; color: var(--text-main);">待实物查验与验收入库的供应商送货单</span>
+                  <span class="status-chip chip-warning font-mono">{{ pendingSupplierDeliveries.length }} 笔待验</span>
+                </div>
+                <span class="font-mono text-muted" style="font-size: 11px;">遵循国家药品监督管理局《医疗器械经营质量管理规范》进货验收要求</span>
+              </div>
+
+              <el-table
+                v-if="pendingSupplierDeliveries.length > 0"
+                :data="pendingSupplierDeliveries"
+                size="small"
+                border
+                class="fusion-styled-table"
+                style="margin-bottom: 4px;"
+              >
+                <el-table-column prop="order_no" label="送货入库单号" width="180">
+                  <template #default="{ row }">
+                    <span class="font-mono font-bold text-accent">{{ row.order_no }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="source_ref_order_no" label="采购单号" width="150" class-name="font-mono text-muted" />
+                <el-table-column prop="target_dept_or_supplier" label="供应商名称" min-width="150" show-overflow-tooltip />
+                <el-table-column prop="product_name" label="送货物资品名" min-width="160" show-overflow-tooltip />
+                <el-table-column prop="batch_no" label="生产批次" width="130" class-name="font-mono" />
+                <el-table-column prop="quantity" label="到货数量" width="100" align="right">
+                  <template #default="{ row }">
+                    <strong class="font-mono text-success">{{ row.quantity }}</strong>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="total_amount" label="到货金额" width="120" align="right">
+                  <template #default="{ row }">
+                    <span class="font-mono font-bold">¥ {{ Number(row.total_amount || 0).toFixed(2) }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="实物查验与入库操作" width="180" align="center" fixed="right">
+                  <template #default="{ row }">
+                    <el-button
+                      type="success"
+                      size="small"
+                      @click="handleAcceptSupplierDelivery(row)"
+                    >
+                      <SvgIcon name="check" :size="12" style="margin-right: 4px;" />
+                      查验实物并验收入库
+                    </el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+              <div v-else style="padding: 8px 0; text-align: center; color: var(--text-muted); font-size: 12px;">
+                暂无待验收供应商送货单，所有到货物资均已完成验收入库并转为可用库存
+              </div>
+            </div>
+
             <!-- 入库单据主列表 -->
             <el-table
               :data="paginatedInboundOrders"
@@ -286,7 +342,7 @@
               <el-table-column prop="confirm_stage" label="审核状态" width="130" align="center">
                 <template #default="{ row }">
                   <span v-if="row.confirm_stage === 'SUBMITTED'" class="status-chip chip-active">已审核入库</span>
-                  <span v-else class="status-chip chip-locked">待二次确认</span>
+                  <span v-else class="status-chip chip-locked">待验收入库</span>
                 </template>
               </el-table-column>
 
@@ -299,7 +355,7 @@
                       type="primary"
                       @click="openTwoStep(row, 'SECOND_CONFIRM')"
                     >
-                      二次确认
+                      验收入库
                     </el-button>
                     <el-button
                       v-if="row.confirm_stage === 'SUBMITTED' && userStore.canAction('GEN_INBOUND', 'can_cancel_submit')"
@@ -1266,6 +1322,7 @@ import PrintVoucherDialog from '@/components/PrintVoucherDialog.vue';
 import SelectProductDictDialog from '@/components/SelectProductDictDialog.vue';
 import StocktakePlanWorkbench from '@/components/StocktakePlanWorkbench.vue';
 import { httpGet, httpPost } from '@/api/request';
+import { acceptSupplierDeliveryInbound } from '@/api/supplierPurchaseApi';
 
 const userStore = useUserStore();
 const route = useRoute();
@@ -1577,6 +1634,14 @@ const paginatedOutboundOrders = computed(() => {
 
 const inboundOrders = computed(() =>
   allOrders.value.filter((o) => o.order_type === 'GEN_INBOUND' || o.order_type === 'PURCHASE_INBOUND' || o.order_type === 'RETURN_TO_SUPPLIER')
+);
+
+const pendingSupplierDeliveries = computed(() =>
+  allOrders.value.filter(
+    (o) => (o.order_type === 'GEN_INBOUND' || o.order_type === 'PURCHASE_INBOUND') &&
+           o.confirm_stage === 'PENDING_CONFIRM' &&
+           o.order_no.startsWith('INB-SUP-')
+  )
 );
 
 const outboundOrders = computed(() =>
@@ -2059,6 +2124,41 @@ async function handleTwoStepActionSubmit(payload: { action: string; orderNo: str
     ElMessage.error(err.message || '状态机跃迁被拦截');
   }
 }
+
+/**
+ * 查验供应商送货实物与批次并办理正式验收入库
+ * @param row 送货待验单据
+ * @returns Promise<void>
+ * @route POST /ext/orders/supplier-delivery/accept
+ * @throws 当验收操作取消或网络异常时抛出
+ */
+async function handleAcceptSupplierDelivery(row: InboundOutboundOrder): Promise<void> {
+  try {
+    await ElMessageBox.confirm(
+      `确认对供应商送货单 [${row.order_no}] 实施开箱查验，核对批号 [${row.batch_no}] 与实物数量 [${row.quantity}件] 无误并办理正式入库吗？`,
+      '实物查验入库确认',
+      {
+        confirmButtonText: '确认验收入库',
+        cancelButtonText: '取消',
+        type: 'success'
+      }
+    );
+    await acceptSupplierDeliveryInbound({
+      order_no: row.order_no,
+      warehouse_code: row.warehouse_code || 'WH_WEICAI',
+      operator_name: userStore.currentUser.realName,
+      accept_remark: '到货外包装完好，合格证批号齐全，查验合格验收入库'
+    });
+    ElMessage.success(`送货单 [${row.order_no}] 实物查验通过，已成功验收入库！主库库存已同步递增`);
+    await fetchOrders();
+    await fetchRealtimeStock();
+  } catch (err: any) {
+    if (err !== 'cancel') {
+      ElMessage.error(err.message || '验收入库失败');
+    }
+  }
+}
+
 
 function openPrint(row: InboundOutboundOrder) {
   selectedPrintOrder.value = { ...row };

@@ -31,6 +31,7 @@ frontend/dist-ssr/
 *.local
 .npm
 .eslintcache
+*.timestamp-*.mjs
 
 # Environment & Secrets
 .env

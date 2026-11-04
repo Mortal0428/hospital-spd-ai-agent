@@ -85,3 +85,32 @@ export function approveRequisitionAutoOutbound(
 ): Promise<{ auto_outbound_order_no: string; source_ref_order_no: string; quantity: number; confirm_stage: string }> {
   return httpPost(`/ext/orders/requisition-auto-outbound/${reqId}?auditor_name=${encodeURIComponent(auditorName)}`);
 }
+
+/**
+ * 查询指定临床科室消耗的物料级明细清单（穿透至品名、规格、批次、数量、单价、经办人与病案）
+ * @param params 科室编码或名称
+ * @returns Promise 物料级消耗明细列表
+ * @route GET /ext/finance/dept-material-details
+ * @throws Error 当请求异常时向外抛出
+ */
+export function getDeptMaterialDetails(params: { dept_code?: string; dept_name?: string }): Promise<any[]> {
+  return httpGet('/ext/finance/dept-material-details', params);
+}
+
+/**
+ * 查询多级仓库/二级小仓库的全景资金流水台账（涵盖调入、发料、病区调拨、患者核销、盘点损益与退库）
+ * @param params 仓库编码、流向类型、关键字及分页参数
+ * @returns Promise 分页资金流水台账
+ * @route GET /ext/finance/sub-warehouse-flows
+ * @throws Error 当请求异常时向外抛出
+ */
+export function getSubWarehouseFlows(params: {
+  warehouse_code?: string;
+  flow_type?: string;
+  keyword?: string;
+  page?: number;
+  page_size?: number;
+}): Promise<{ total: number; page: number; page_size: number; items: any[] }> {
+  return httpGet('/ext/finance/sub-warehouse-flows', params);
+}
+

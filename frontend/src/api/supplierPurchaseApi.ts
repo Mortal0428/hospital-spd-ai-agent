@@ -66,3 +66,20 @@ export function flowSupplierPurchaseAction(data: {
 }): Promise<{ order_no: string; supplier_code: string; qual_audit_status: string; purchase_flow_status: string; auto_inbound_order_no: string | null }> {
   return httpPost('/ext/supplier-purchase/flow', data);
 }
+
+/**
+ * 主库管理员对供应商送货单实施实物查验与批号核验并正式验收入库
+ * @param data 验收入库载荷
+ * @returns Promise 验收入库结果
+ * @route POST /ext/orders/supplier-delivery/accept
+ * @throws Error 当验收失败时抛出
+ */
+export function acceptSupplierDeliveryInbound(data: {
+  order_no: string;
+  warehouse_code?: string;
+  operator_name: string;
+  accept_remark?: string;
+}): Promise<{ order_no: string; warehouse_code: string; quantity: number; status: string }> {
+  return httpPost('/ext/orders/supplier-delivery/accept', data);
+}
+

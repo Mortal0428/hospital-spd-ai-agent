@@ -206,6 +206,25 @@
                 配货发货
               </el-button>
 
+              <!-- 已发货状态：医院方显示前往验收入库，供应商显示等待医院验收 -->
+              <template v-else-if="row.purchase_flow_status === 'HOSP_INBOUND_CREATED'">
+                <el-button
+                  v-if="userStore.currentUser.roleCode !== 'supplier_user'"
+                  size="small"
+                  type="warning"
+                  @click="goToMainWarehouseInbound(row)"
+                >
+                  前往验收入库
+                </el-button>
+                <span v-else class="status-chip chip-info font-mono" style="font-size: 11px;">
+                  已发货·待医院验收
+                </span>
+              </template>
+
+              <span v-else-if="row.purchase_flow_status === 'HOSP_INBOUND_ACCEPTED'" class="status-chip chip-active font-mono" style="font-size: 11px;">
+                已完成验收入库
+              </span>
+
               <span v-else class="text-muted font-mono" style="font-size: 11.5px;">入库待验收</span>
             </div>
           </template>
@@ -1030,6 +1049,26 @@ async function handleShipSubmit() {
     ElMessage.error(err.message || '发货操作失败');
   }
 }
+
+/**
+ * 医院采购或库管人员一键跳转至普通耗材主库验收入库看板
+ * @param row 采购单据对象
+ * @returns void
+ * @route internal://SupplierPurchaseView/goToMainWarehouseInbound
+ * @throws 无异常抛出
+ */
+function goToMainWarehouseInbound(row: SupplierPurchaseOrder): void {
+  const inbNo = row.auto_inbound_order_no || '';
+  ElMessage.info(`正在前往耗材主库查验送货单 [${inbNo}] 并办理验收入库...`);
+  router.push({
+    path: '/general',
+    query: {
+      tab: 'inbound',
+      inb_no: inbNo
+    }
+  });
+}
+
 
 onMounted(() => {
   fetchOrders();

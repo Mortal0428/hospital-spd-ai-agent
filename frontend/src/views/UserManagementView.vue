@@ -158,21 +158,45 @@
                   <span v-else class="status-chip">{{ row.role_code }}</span>
                 </template>
               </el-table-column>
-              <el-table-column prop="dept_name" label="所属科室/库房" width="170">
+              <el-table-column prop="dept_name" label="所属科室" width="140">
                 <template #default="{ row }">
                   <span>{{ row.dept_name || row.dept_code }}</span>
                 </template>
               </el-table-column>
-              <el-table-column prop="phone_masked" label="联系电话 (脱敏)" width="150" class-name="font-mono" />
-              <el-table-column prop="status" label="账号状态" width="110" align="center">
+              <el-table-column label="经办/分管库藏 (多仓)" min-width="260">
+                <template #default="{ row }">
+                  <div v-if="row.role_code === 'sys_admin'" style="display: flex; gap: 4px; flex-wrap: wrap; align-items: center;">
+                    <span class="status-chip chip-active" style="font-size: 11px;">全院全部仓库 (穿透模式)</span>
+                  </div>
+                  <div v-else-if="row.authorized_warehouses && row.authorized_warehouses.length > 0" style="display: flex; gap: 4px; flex-wrap: wrap; align-items: center;">
+                    <el-tag
+                      v-for="w in row.authorized_warehouses"
+                      :key="w.warehouse_code"
+                      size="small"
+                      effect="plain"
+                      :type="w.warehouse_level === 'MAIN_GROUP' ? 'warning' : (w.warehouse_level === 'DEPT_PRIMARY' ? 'primary' : 'success')"
+                      style="font-size: 11px; border-radius: 4px;"
+                    >
+                      {{ w.warehouse_name }}
+                    </el-tag>
+                  </div>
+                  <div v-else style="display: flex; align-items: center; gap: 6px;">
+                    <span class="text-muted" style="font-size: 11px;">未分配分仓</span>
+                    <el-button link type="primary" size="small" @click="goToWarehouseTab(row.id)">+ 分配</el-button>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column prop="phone_masked" label="联系电话 (脱敏)" width="140" class-name="font-mono" />
+              <el-table-column prop="status" label="账号状态" width="105" align="center">
                 <template #default="{ row }">
                   <span v-if="row.status === 1" class="status-chip chip-active">正常在用</span>
                   <span v-else class="status-chip chip-disabled">已停用冻结</span>
                 </template>
               </el-table-column>
-              <el-table-column label="管理操作" min-width="260" fixed="right">
+              <el-table-column label="管理操作" min-width="310" fixed="right">
                 <template #default="{ row }">
                   <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                    <el-button size="small" type="primary" plain @click="goToWarehouseTab(row.id)">库藏授权</el-button>
                     <el-button size="small" plain @click="openEditUser(row)">编辑</el-button>
                     <el-button size="small" type="warning" plain @click="openResetPassword(row)">重置密码</el-button>
                     <el-button
@@ -218,7 +242,7 @@
                   </option>
                 </select>
               </div>
-              <div class="rbac-batch-toolbar" style="width: 100%; display: flex; gap: 10px; align-items: center; padding-top: 6px; border-top: 1px dashed var(--spd-border-subtle);">
+              <div class="rbac-batch-toolbar" style="width: 100%; display: flex; gap: 10px; align-items: center; padding-top: 6px; border-top: 1px dashed var(--spd-border-subtle); flex-wrap: wrap;">
                 <span class="font-bold text-muted" style="font-size: 12px;">矩阵批量快捷操作：</span>
                 <el-button type="primary" size="small" @click="handleBatchGrantAll(1)">
                   一键授予全权 (全亮)
@@ -231,6 +255,28 @@
                 </el-button>
                 <el-button type="danger" plain size="small" @click="handleBatchGrantAll(0)">
                   一键清空权限 (全部禁用)
+                </el-button>
+                <el-button
+                  type="success"
+                  size="small"
+                  :loading="savingRbac"
+                  @click="handleSaveRbacMatrix"
+                  style="margin-left: auto; font-weight: 700; padding: 0 18px; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);"
+                >
+                  保存并下发全院权限矩阵 (持久化落盘)
+                </el-button>
+              </div>
+
+              <!-- 存在未保存修改时的即时警示条幅 -->
+              <div
+                v-if="hasUnsavedChanges"
+                style="width: 100%; margin-top: 8px; padding: 8px 14px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 8px; display: flex; align-items: center; justify-content: space-between;"
+              >
+                <span style="font-size: 12px; color: #d97706; font-weight: 600;">
+                  提示：当前人员的权限矩阵存在未保存的修改，请务必点击右侧【保存并下发全院权限矩阵】完成持久化落盘，否则刷新页面将变回原样！
+                </span>
+                <el-button type="success" size="small" :loading="savingRbac" @click="handleSaveRbacMatrix" style="font-weight: 700;">
+                  立即落盘保存
                 </el-button>
               </div>
             </div>
@@ -283,6 +329,123 @@
                     <el-button size="small" type="primary" link @click="handleToggleRowAll(row, 1)">全开</el-button>
                     <span style="color: var(--border-divider);">|</span>
                     <el-button size="small" type="danger" link @click="handleToggleRowAll(row, 0)">全关</el-button>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </el-tab-pane>
+
+        <!-- Tab 3: 多级库藏分仓授权中台 (按人分仓) -->
+        <el-tab-pane label="多级库藏分仓授权中台" name="warehouses">
+          <div class="tab-content-area">
+            <div class="pane-action-bar" style="flex-wrap: wrap; gap: 12px;">
+              <div class="action-desc-text">
+                <SvgIcon name="database" :size="15" color="var(--accent-primary)" />
+                <span>全院多级库藏分仓授权中台 · 为医院各岗位人员灵活配置所经办分管的普通总仓、高值专仓与各科室二级库，并精细控制 6 项库房原子操作</span>
+              </div>
+              <div style="display: flex; gap: 10px; align-items: center; margin-left: auto;">
+                <label style="font-size: 13px; color: var(--text-secondary);">配置目标用户：</label>
+                <select id="wh-perm-target-user-select" v-model="selectedWhUserId" class="spd-select" style="width: 240px;" @change="handleWhUserChange">
+                  <option v-for="u in userList" :key="u.id" :value="u.id">
+                    {{ u.real_name }} ({{ u.username }} · {{ u.role_code }})
+                  </option>
+                </select>
+              </div>
+              <div class="rbac-batch-toolbar" style="width: 100%; display: flex; gap: 10px; align-items: center; padding-top: 6px; border-top: 1px dashed var(--spd-border-subtle); flex-wrap: wrap;">
+                <span class="font-bold text-muted" style="font-size: 12px;">库藏批量快捷操作：</span>
+                <el-button type="primary" size="small" @click="handleToggleAllWarehouses(1)">
+                  一键授予全仓全权 (全亮)
+                </el-button>
+                <el-button type="info" plain size="small" @click="handleToggleAllWarehousesViewOnly">
+                  全仓只读巡检 (仅查看)
+                </el-button>
+                <el-button type="warning" plain size="small" @click="handleApplyRoleWarehouseTemplate">
+                  按角色标准模板恢复
+                </el-button>
+                <el-button type="danger" plain size="small" @click="handleToggleAllWarehouses(0)">
+                  一键清空全部库藏 (禁用)
+                </el-button>
+                <el-button
+                  type="success"
+                  size="small"
+                  :loading="savingWhPerms"
+                  @click="handleSaveWarehousePermsMatrix"
+                  style="margin-left: auto; font-weight: 700; padding: 0 18px; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);"
+                >
+                  保存并下发全院库藏授权 (持久化落盘)
+                </el-button>
+              </div>
+
+              <!-- 存在未保存修改时的即时警示条幅 -->
+              <div
+                v-if="hasUnsavedWhChanges"
+                style="width: 100%; margin-top: 8px; padding: 8px 14px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 8px; display: flex; align-items: center; justify-content: space-between;"
+              >
+                <span style="font-size: 12px; color: #d97706; font-weight: 600;">
+                  提示：当前人员的库藏分仓授权存在未保存修改，请务必点击右侧【保存并下发全院库藏授权】完成持久化落盘，否则刷新或切换人员后将变回原样！
+                </span>
+                <el-button type="success" size="small" :loading="savingWhPerms" @click="handleSaveWarehousePermsMatrix" style="font-weight: 700;">
+                  立即落盘保存
+                </el-button>
+              </div>
+            </div>
+
+            <el-table :data="warehousePermsMatrixList" border stripe class="fusion-styled-table" v-loading="loadingWhPerms">
+              <el-table-column prop="warehouse_code" label="仓库编码" width="160" class-name="font-mono text-accent">
+                <template #default="{ row }">
+                  <span class="font-mono font-bold">{{ row.warehouse_code }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="warehouse_name" label="仓库名称" width="200">
+                <template #default="{ row }">
+                  <strong>{{ row.warehouse_name }}</strong>
+                </template>
+              </el-table-column>
+              <el-table-column prop="warehouse_level" label="仓库层级/归口" width="150" align="center">
+                <template #default="{ row }">
+                  <span v-if="row.warehouse_level === 'MAIN_GROUP'" class="status-chip chip-warning">一级总仓/主库</span>
+                  <span v-else-if="row.warehouse_level === 'DEPT_PRIMARY'" class="status-chip chip-info">科室二级库</span>
+                  <span v-else-if="row.warehouse_level === 'SPECIALTY_CABINET'" class="status-chip chip-active">高值耗材专柜</span>
+                  <span v-else class="status-chip">{{ row.warehouse_level }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="查看库存 (view)" align="center" width="120">
+                <template #default="{ row }">
+                  <el-switch v-model="row.can_view" :active-value="1" :inactive-value="0" @change="handleToggleWhPerm(row, 'can_view')" />
+                </template>
+              </el-table-column>
+              <el-table-column label="申领/调拨 (apply)" align="center" width="120">
+                <template #default="{ row }">
+                  <el-switch v-model="row.can_apply" :active-value="1" :inactive-value="0" @change="handleToggleWhPerm(row, 'can_apply')" />
+                </template>
+              </el-table-column>
+              <el-table-column label="验收入库 (inbound)" align="center" width="120">
+                <template #default="{ row }">
+                  <el-switch v-model="row.can_inbound" :active-value="1" :inactive-value="0" @change="handleToggleWhPerm(row, 'can_inbound')" />
+                </template>
+              </el-table-column>
+              <el-table-column label="审核出库 (outbound)" align="center" width="120">
+                <template #default="{ row }">
+                  <el-switch v-model="row.can_outbound" :active-value="1" :inactive-value="0" @change="handleToggleWhPerm(row, 'can_outbound')" />
+                </template>
+              </el-table-column>
+              <el-table-column label="盘点核算 (stocktake)" align="center" width="125">
+                <template #default="{ row }">
+                  <el-switch v-model="row.can_stocktake" :active-value="1" :inactive-value="0" @change="handleToggleWhPerm(row, 'can_stocktake')" />
+                </template>
+              </el-table-column>
+              <el-table-column label="转库调拔 (transfer)" align="center" width="120">
+                <template #default="{ row }">
+                  <el-switch v-model="row.can_transfer" :active-value="1" :inactive-value="0" @change="handleToggleWhPerm(row, 'can_transfer')" />
+                </template>
+              </el-table-column>
+              <el-table-column label="整仓快捷 (6项动作)" align="center" width="140" fixed="right">
+                <template #default="{ row }">
+                  <div style="display: flex; gap: 8px; justify-content: center; align-items: center;">
+                    <el-button size="small" type="primary" link @click="handleToggleWhRowAll(row, 1)">全开</el-button>
+                    <span style="color: var(--border-divider);">|</span>
+                    <el-button size="small" type="danger" link @click="handleToggleWhRowAll(row, 0)">全关</el-button>
                   </div>
                 </template>
               </el-table-column>
@@ -377,6 +540,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { httpGet, httpPost, httpPut, httpDelete } from '@/api/request';
 import { useUserStore } from '@/stores/userStore';
 import SvgIcon from '@/components/common/SvgIcon.vue';
+import { listWarehouses, getUserWarehousePerms, batchSaveUserWarehousePerms, type UserWarehousePermItem } from '@/api/dictApi';
 
 interface UserItem {
   id: number;
@@ -389,6 +553,17 @@ interface UserItem {
   phone_masked?: string;
   status: number;
   created_at: string;
+  authorized_warehouses?: Array<{
+    warehouse_code: string;
+    warehouse_name: string;
+    warehouse_level: string;
+    can_view: number;
+    can_apply: number;
+    can_inbound: number;
+    can_outbound: number;
+    can_stocktake: number;
+    can_transfer: number;
+  }>;
 }
 
 const userStore = useUserStore();
@@ -405,6 +580,8 @@ watch(
   (val) => {
     if (val === 'rbac') {
       activeTab.value = 'rbac';
+    } else if (val === 'warehouses') {
+      activeTab.value = 'warehouses';
     } else {
       activeTab.value = 'users';
     }
@@ -446,6 +623,16 @@ const newPassword = ref('');
 const selectedRbacUserId = ref<number>(1);
 const rbacMatrixList = ref<any[]>([]);
 const loadingRbac = ref(false);
+const savingRbac = ref(false);
+const hasUnsavedChanges = ref(false);
+
+// 库藏分仓授权中台状态
+const selectedWhUserId = ref<number>(1);
+const allWarehouseNodes = ref<any[]>([]);
+const warehousePermsMatrixList = ref<UserWarehousePermItem[]>([]);
+const loadingWhPerms = ref(false);
+const savingWhPerms = ref(false);
+const hasUnsavedWhChanges = ref(false);
 
 const activeUsersCount = computed(() => userList.value.filter((u) => u.status === 1).length);
 
@@ -617,12 +804,36 @@ async function fetchRbacMatrix() {
   loadingRbac.value = true;
   try {
     const res = await httpGet<any>(`/ext/rbac/matrix?user_id=${selectedRbacUserId.value}`);
-    const list = res.data?.permissions || res.data?.modules || [];
+    const list = res?.permissions || res?.data?.permissions || res?.modules || (Array.isArray(res) ? res : []);
     rbacMatrixList.value = list.length > 0 ? list : getFallbackRbac();
+    hasUnsavedChanges.value = false;
   } catch {
     rbacMatrixList.value = getFallbackRbac();
+    hasUnsavedChanges.value = false;
   } finally {
     loadingRbac.value = false;
+  }
+}
+
+/**
+ * 全量持久化保存当前人员 15 模块 x 8 动作细粒度 RBAC 权限矩阵
+ * @route POST /api/v1/ext/rbac/save-matrix
+ * @throws {Error} 网络或业务异常时提示
+ */
+async function handleSaveRbacMatrix() {
+  savingRbac.value = true;
+  try {
+    await httpPost('/ext/rbac/save-matrix', {
+      user_id: selectedRbacUserId.value,
+      operator_name: userStore.currentUser.realName || '系统管理员',
+      permissions: rbacMatrixList.value
+    });
+    hasUnsavedChanges.value = false;
+    ElMessage.success('15 模块 x 8 动作细粒度 RBAC 权限矩阵已全量持久化保存！刷新页面保持最新配置。');
+  } catch (err: any) {
+    ElMessage.error(err.message || '保存权限矩阵失败');
+  } finally {
+    savingRbac.value = false;
   }
 }
 
@@ -646,7 +857,8 @@ async function handleBatchGrantAll(actionVal: number) {
         row[act] = actionVal;
       }
     }
-    ElMessage.success(actionVal === 1 ? '已一键授予当前人员全部 15 模块 x 8 动作全权！' : '已一键清空当前人员全部业务权限！');
+    hasUnsavedChanges.value = true;
+    ElMessage.success(actionVal === 1 ? '已一键授予当前人员全部 15 模块 x 8 动作全权！请点击保存按钮完成持久化落盘。' : '已一键清空当前人员全部业务权限！请点击保存按钮完成持久化落盘。');
   } catch (err: any) {
     ElMessage.error(err.message || '批量赋权失败');
   }
@@ -668,6 +880,7 @@ async function handleToggleRowAll(row: any, val: number) {
       action_value: val,
       operator_name: userStore.currentUser.realName
     });
+    hasUnsavedChanges.value = true;
     ElMessage.success(`模块 [${row.module_name}] 8项权限已整行${val === 1 ? '一键开启' : '一键清空'}`);
   } catch (err: any) {
     ElMessage.error(err.message || '整行权限设置失败');
@@ -704,6 +917,7 @@ async function handleBatchGrantReadOnly() {
       row.can_approve = 0;
       row.can_print = 0;
     }
+    hasUnsavedChanges.value = true;
     ElMessage.success('已切换为全局只读模式（仅允许浏览查看）');
   } catch (err: any) {
     ElMessage.error(err.message || '切换只读失败');
@@ -728,7 +942,8 @@ async function handleTogglePerm(row: any, field: string) {
       field,
       val: row[field]
     });
-    ElMessage.success(`权限 [${row.module_name} · ${field}] 已实时同步更新`);
+    hasUnsavedChanges.value = true;
+    ElMessage.success(`权限 [${row.module_name} · ${field}] 已实时生效并同步更新`);
   } catch (err: any) {
     ElMessage.error(err.message || '权限切换失败');
   }
@@ -748,15 +963,337 @@ function getFallbackRbac() {
     { module_code: 'SEC_MANUAL_OUT', module_name: '二级库发料手动出库', can_view: 1, can_create: 1, can_edit: 0, can_delete: 0, can_second_confirm: 1, can_cancel_submit: 0, can_approve: 0, can_print: 1 },
     { module_code: 'SEC_TRANSFER', module_name: '跨病区科室调拨', can_view: 1, can_create: 1, can_edit: 1, can_delete: 0, can_second_confirm: 1, can_cancel_submit: 1, can_approve: 1, can_print: 1 },
     { module_code: 'SEC_STOCKTAKE', module_name: '临床二级库独立盘点', can_view: 1, can_create: 1, can_edit: 1, can_delete: 0, can_second_confirm: 1, can_cancel_submit: 0, can_approve: 1, can_print: 1 },
-    { module_code: 'PURCHASE_PLAN', module_name: '采购协同与外部供应', can_view: 1, can_create: 1, can_edit: 1, can_delete: 0, can_second_confirm: 1, can_cancel_submit: 1, can_approve: 1, can_print: 1 },
+    { module_code: 'PURCHASE_PLAN', module_name: '多级采购计划与准入审核', can_view: 1, can_create: 1, can_edit: 1, can_delete: 0, can_second_confirm: 1, can_cancel_submit: 1, can_approve: 1, can_print: 1 },
     { module_code: 'FINANCE_AUDIT', module_name: '财务精算与对账审计', can_view: 1, can_create: 0, can_edit: 0, can_delete: 0, can_second_confirm: 0, can_cancel_submit: 0, can_approve: 1, can_print: 1 },
-    { module_code: 'WORKFLOW_LOG', module_name: '物资全生命周期审计', can_view: 1, can_create: 0, can_edit: 0, can_delete: 0, can_second_confirm: 0, can_cancel_submit: 0, can_approve: 1, can_print: 1 }
+    { module_code: 'WORKFLOW_LOG', module_name: '物资全生命周期审计', can_view: 1, can_create: 0, can_edit: 0, can_delete: 0, can_second_confirm: 0, can_cancel_submit: 0, can_approve: 1, can_print: 1 },
+    { module_code: 'AGENT_HUB', module_name: '6大智能体与知识工程中台', can_view: 1, can_create: 1, can_edit: 1, can_delete: 0, can_second_confirm: 1, can_cancel_submit: 0, can_approve: 1, can_print: 1 }
   ];
+}
+
+/**
+ * 拉取全院标准库房架构节点列表
+ * @returns {Promise<void>}
+ * @route GET /api/v1/dict/warehouses
+ * @throws {Error} 网络异常兜底使用三甲医院9大标准分仓架构
+ */
+async function fetchWarehouseNodes() {
+  try {
+    const res = await listWarehouses();
+    const list = Array.isArray(res) ? res : ((res as any)?.items || (res as any)?.data || []);
+    if (list && list.length > 0) {
+      allWarehouseNodes.value = list;
+    } else {
+      allWarehouseNodes.value = getDefaultWarehouseNodes();
+    }
+  } catch {
+    allWarehouseNodes.value = getDefaultWarehouseNodes();
+  }
+}
+
+/**
+ * 默认三甲医院 9 大标准库房节点定义
+ * @returns {Array<any>} 9 大标准库房列表
+ */
+function getDefaultWarehouseNodes() {
+  return [
+    { warehouse_code: 'WH_WEICAI', warehouse_name: '全院卫材耗材一级总仓', warehouse_level: 'MAIN_GROUP' },
+    { warehouse_code: 'WH_ZONGWU', warehouse_name: '后勤总务库房', warehouse_level: 'MAIN_GROUP' },
+    { warehouse_code: 'WH_HOUQIN', warehouse_name: '后勤物资保障库', warehouse_level: 'MAIN_GROUP' },
+    { warehouse_code: 'WH_EQUIP', warehouse_name: '大型医疗设备总库', warehouse_level: 'MAIN_GROUP' },
+    { warehouse_code: 'WH_XINXI', warehouse_name: '信息科机房物资专用库', warehouse_level: 'MAIN_GROUP' },
+    { warehouse_code: 'WH_ZHUANXIANG', warehouse_name: '高值医用耗材智能专柜', warehouse_level: 'SPECIALTY_CABINET' },
+    { warehouse_code: 'WH_SEC_ORTHO', warehouse_name: '骨科病区二级临床库', warehouse_level: 'DEPT_PRIMARY' },
+    { warehouse_code: 'WH_SEC_CARDIO', warehouse_name: '心内科病区二级临床库', warehouse_level: 'DEPT_PRIMARY' },
+    { warehouse_code: 'WH_SEC_SURGERY', warehouse_name: '麻醉手术室二级专科库', warehouse_level: 'DEPT_PRIMARY' }
+  ];
+}
+
+/**
+ * 拉取目标人员的库藏分仓授权明细矩阵并与全院标准仓库对齐
+ * @param {number} [targetUserId] 可选目标用户ID，缺省使用当前选中的 selectedWhUserId
+ * @returns {Promise<void>}
+ * @route GET /api/v1/dict/user-warehouse-perms?user_id=xxx
+ * @throws {Error} 加载异常时给出友善错误提示
+ */
+async function fetchUserWarehousePermsMatrix(targetUserId?: number) {
+  const uid = targetUserId || selectedWhUserId.value;
+  loadingWhPerms.value = true;
+  try {
+    if (allWarehouseNodes.value.length === 0) {
+      await fetchWarehouseNodes();
+    }
+    const res = await getUserWarehousePerms(uid);
+    const existingPerms: UserWarehousePermItem[] = Array.isArray(res) ? res : ((res as any)?.items || (res as any)?.data || []);
+    const permMap = new Map<string, UserWarehousePermItem>();
+    existingPerms.forEach(p => {
+      permMap.set(p.warehouse_code, p);
+    });
+
+    // 将 9 大标准仓与已有权限进行合并对齐
+    const matrix: UserWarehousePermItem[] = allWarehouseNodes.value.map(wh => {
+      const existing = permMap.get(wh.warehouse_code);
+      if (existing) {
+        return {
+          ...existing,
+          warehouse_name: existing.warehouse_name || wh.warehouse_name,
+          warehouse_level: existing.warehouse_level || wh.warehouse_level
+        };
+      }
+      return {
+        user_id: uid,
+        warehouse_code: wh.warehouse_code,
+        warehouse_name: wh.warehouse_name,
+        warehouse_level: wh.warehouse_level,
+        can_view: 0,
+        can_apply: 0,
+        can_inbound: 0,
+        can_outbound: 0,
+        can_stocktake: 0,
+        can_transfer: 0
+      };
+    });
+
+    warehousePermsMatrixList.value = matrix;
+    hasUnsavedWhChanges.value = false;
+  } catch (err: any) {
+    ElMessage.error(err.message || '加载用户库藏分仓授权矩阵失败');
+  } finally {
+    loadingWhPerms.value = false;
+  }
+}
+
+/**
+ * 切换中台目标人员下拉选项
+ * @returns {Promise<void>}
+ */
+async function handleWhUserChange() {
+  await fetchUserWarehousePermsMatrix(selectedWhUserId.value);
+}
+
+/**
+ * 从人员台账表格快捷跳转至库藏授权中台并定位该人员
+ * @param {number} userId 目标用户ID
+ */
+function goToWarehouseTab(userId: number) {
+  selectedWhUserId.value = userId;
+  activeTab.value = 'warehouses';
+  fetchUserWarehousePermsMatrix(userId);
+}
+
+/**
+ * 切换单项库藏原子操作权限开关
+ * @param {UserWarehousePermItem} row 仓库行数据
+ * @param {string} field 权限属性字段
+ */
+function handleToggleWhPerm(row: any, field: string) {
+  hasUnsavedWhChanges.value = true;
+  // 业务逻辑守护：若开启了任何写操作，必须联动开启查看权限
+  if (field !== 'can_view' && row[field] === 1) {
+    row.can_view = 1;
+  }
+  // 若关闭了查看权限，为安全起见联动关闭所有经办动作
+  if (field === 'can_view' && row.can_view === 0) {
+    row.can_apply = 0;
+    row.can_inbound = 0;
+    row.can_outbound = 0;
+    row.can_stocktake = 0;
+    row.can_transfer = 0;
+  }
+}
+
+/**
+ * 单个仓库整行快捷开关 (6项原子动作一键开启或关闭)
+ * @param {UserWarehousePermItem} row 仓库行数据
+ * @param {number} val 开关状态 0或1
+ */
+function handleToggleWhRowAll(row: any, val: number) {
+  row.can_view = val;
+  row.can_apply = val;
+  row.can_inbound = val;
+  row.can_outbound = val;
+  row.can_stocktake = val;
+  row.can_transfer = val;
+  hasUnsavedWhChanges.value = true;
+}
+
+/**
+ * 全院仓库批量全选或全部清空
+ * @param {number} val 开关状态 0或1
+ */
+function handleToggleAllWarehouses(val: number) {
+  for (const row of warehousePermsMatrixList.value) {
+    row.can_view = val;
+    row.can_apply = val;
+    row.can_inbound = val;
+    row.can_outbound = val;
+    row.can_stocktake = val;
+    row.can_transfer = val;
+  }
+  hasUnsavedWhChanges.value = true;
+  ElMessage.success(val === 1 ? '已一键授予当前人员全院全部库藏全权！请点击保存按钮落盘。' : '已一键清空全部库藏权限！请点击保存按钮落盘。');
+}
+
+/**
+ * 全院仓库一键切换为只读巡检模式 (仅开启 can_view)
+ */
+function handleToggleAllWarehousesViewOnly() {
+  for (const row of warehousePermsMatrixList.value) {
+    row.can_view = 1;
+    row.can_apply = 0;
+    row.can_inbound = 0;
+    row.can_outbound = 0;
+    row.can_stocktake = 0;
+    row.can_transfer = 0;
+  }
+  hasUnsavedWhChanges.value = true;
+  ElMessage.success('已切换为全仓只读巡检模式（仅保留查看权限）');
+}
+
+/**
+ * 根据当前人员的系统角色与归属科室，自动套用医院标准分仓模板
+ */
+function handleApplyRoleWarehouseTemplate() {
+  const target = userList.value.find(u => u.id === selectedWhUserId.value);
+  if (!target) return;
+
+  const role = target.role_code;
+  const deptCode = target.dept_code || '';
+
+  for (const row of warehousePermsMatrixList.value) {
+    // 默认全关
+    row.can_view = 0;
+    row.can_apply = 0;
+    row.can_inbound = 0;
+    row.can_outbound = 0;
+    row.can_stocktake = 0;
+    row.can_transfer = 0;
+
+    if (role === 'sys_admin') {
+      // 系统管理员：全院所有仓库全权开通
+      row.can_view = 1;
+      row.can_apply = 1;
+      row.can_inbound = 1;
+      row.can_outbound = 1;
+      row.can_stocktake = 1;
+      row.can_transfer = 1;
+    } else if (role === 'dept_manager') {
+      if (deptCode.includes('EQUIP') || target.dept_id === 3) {
+        // 设备科主管：设备库、信息库
+        if (row.warehouse_code === 'WH_EQUIP' || row.warehouse_code === 'WH_XINXI') {
+          row.can_view = 1;
+          row.can_apply = 1;
+          row.can_inbound = 1;
+          row.can_outbound = 1;
+          row.can_stocktake = 1;
+          row.can_transfer = 1;
+        }
+      } else {
+        // 耗材科主管：卫材库、总务库、后勤库、高值专柜
+        if (['WH_WEICAI', 'WH_ZONGWU', 'WH_HOUQIN', 'WH_ZHUANXIANG'].includes(row.warehouse_code)) {
+          row.can_view = 1;
+          row.can_apply = 1;
+          row.can_inbound = 1;
+          row.can_outbound = 1;
+          row.can_stocktake = 1;
+          row.can_transfer = 1;
+        }
+      }
+    } else if (role === 'secondary_user') {
+      if (deptCode.includes('CARDIO') || target.dept_id === 6 || target.username.includes('cardio')) {
+        // 心内科护士/技师：心内科病区二级库 + 高值专柜
+        if (row.warehouse_code === 'WH_SEC_CARDIO') {
+          row.can_view = 1;
+          row.can_apply = 1;
+          row.can_inbound = 1;
+          row.can_outbound = 1;
+          row.can_stocktake = 1;
+          row.can_transfer = 1;
+        } else if (row.warehouse_code === 'WH_ZHUANXIANG') {
+          row.can_view = 1;
+          row.can_apply = 1;
+          row.can_inbound = 1;
+          row.can_outbound = 0;
+          row.can_stocktake = 0;
+          row.can_transfer = 0;
+        }
+      } else {
+        // 骨科及其他临床科室：骨科病区二级库 + 高值专柜
+        if (row.warehouse_code === 'WH_SEC_ORTHO') {
+          row.can_view = 1;
+          row.can_apply = 1;
+          row.can_inbound = 1;
+          row.can_outbound = 1;
+          row.can_stocktake = 1;
+          row.can_transfer = 1;
+        } else if (row.warehouse_code === 'WH_ZHUANXIANG') {
+          row.can_view = 1;
+          row.can_apply = 1;
+          row.can_inbound = 1;
+          row.can_outbound = 0;
+          row.can_stocktake = 0;
+          row.can_transfer = 0;
+        }
+      }
+    } else if (role === 'finance_auditor') {
+      // 财务审计：全院所有仓库查看与盘点核算权
+      row.can_view = 1;
+      row.can_stocktake = 1;
+    }
+  }
+
+  hasUnsavedWhChanges.value = true;
+  ElMessage.success(`已根据人员 [${target.real_name}] 的角色与科室自动应用标准分仓模板，请点击保存完成落盘！`);
+}
+
+/**
+ * 全量持久化保存当前人员的库藏分仓授权矩阵
+ * @returns {Promise<void>}
+ * @route POST /api/v1/dict/user-warehouse-perms/batch
+ * @throws {Error} 保存失败时提示错误
+ */
+async function handleSaveWarehousePermsMatrix() {
+  savingWhPerms.value = true;
+  try {
+    const payloadPerms = warehousePermsMatrixList.value.map(row => ({
+      warehouse_code: row.warehouse_code,
+      warehouse_name: row.warehouse_name,
+      warehouse_level: row.warehouse_level,
+      can_view: row.can_view ? 1 : 0,
+      can_apply: row.can_apply ? 1 : 0,
+      can_inbound: row.can_inbound ? 1 : 0,
+      can_outbound: row.can_outbound ? 1 : 0,
+      can_stocktake: row.can_stocktake ? 1 : 0,
+      can_transfer: row.can_transfer ? 1 : 0
+    }));
+
+    await batchSaveUserWarehousePerms({
+      user_id: selectedWhUserId.value,
+      perms: payloadPerms
+    });
+
+    hasUnsavedWhChanges.value = false;
+    ElMessage.success('多级库藏分仓授权矩阵已成功持久化落盘！');
+
+    // 重新拉取用户列表以刷新 Tab 1 人员表格中的经办分管库藏彩色标签
+    await fetchUsers();
+
+    // 若配置的是当前登录人员自身，同步刷新顶栏全局仓库下拉选项
+    if (userStore.currentUser.id === selectedWhUserId.value) {
+      await userStore.refreshAuthorizedWarehouses();
+    }
+  } catch (err: any) {
+    ElMessage.error(err.message || '保存库藏分仓授权失败');
+  } finally {
+    savingWhPerms.value = false;
+  }
 }
 
 onMounted(() => {
   fetchUsers();
   fetchRbacMatrix();
+  fetchWarehouseNodes().then(() => {
+    fetchUserWarehousePermsMatrix();
+  });
 });
 </script>
 

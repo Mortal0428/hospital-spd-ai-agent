@@ -138,18 +138,20 @@ export interface PriceAdjustLogItem {
  * 用户-仓库细粒度授权矩阵契约
  */
 export interface UserWarehousePermItem {
-  id: number;
+  id?: number;
   user_id: number;
-  username: string;
+  username?: string;
   warehouse_code: string;
+  warehouse_name?: string;
+  warehouse_level?: string;
   can_view: number;
   can_apply: number;
   can_inbound: number;
   can_outbound: number;
   can_stocktake: number;
   can_transfer: number;
-  updated_by: string;
-  updated_at: string;
+  updated_by?: string;
+  updated_at?: string;
 }
 
 /**
@@ -267,8 +269,8 @@ export function deleteSupplier(id: number): Promise<{ supplier_id: number }> {
 // 5. 仓库树与用户细粒度授权 API
 // =========================================================================
 
-export function listWarehouses(): Promise<WarehouseNode[]> {
-  return httpGet('/dict/warehouses');
+export function listWarehouses(params?: any): Promise<WarehouseNode[]> {
+  return httpGet('/dict/warehouses', params);
 }
 
 export function createWarehouse(data: Partial<WarehouseNode>): Promise<WarehouseNode> {
@@ -314,6 +316,28 @@ export function upsertUserWarehousePerm(data: {
   can_transfer: number;
 }): Promise<UserWarehousePermItem> {
   return httpPost('/dict/user-warehouse-perms', data);
+}
+
+/**
+ * 批量持久化保存指定人员的全量仓库细粒度授权矩阵
+ * @param data 包含 user_id 与各仓库原子权限条目清单
+ * @returns Promise<UserWarehousePermItem[]> 保存成功后的最新矩阵列表
+ * @route POST /api/v1/dict/user-warehouse-perms/batch
+ * @throws 权限或网络异常时抛出
+ */
+export function batchSaveUserWarehousePerms(data: {
+  user_id: number;
+  perms: Array<{
+    warehouse_code: string;
+    can_view: number;
+    can_apply: number;
+    can_inbound: number;
+    can_outbound: number;
+    can_stocktake: number;
+    can_transfer: number;
+  }>;
+}): Promise<UserWarehousePermItem[]> {
+  return httpPost('/dict/user-warehouse-perms/batch', data);
 }
 
 // =========================================================================

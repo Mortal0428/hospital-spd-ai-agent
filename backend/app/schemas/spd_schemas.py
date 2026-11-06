@@ -28,6 +28,12 @@ class LoginRequest(BaseModel):
     password: str = Field(..., description="登录密码")
 
 
+class SwitchTokenRequest(BaseModel):
+    """快速切换账号换取真实 JWT 访问令牌请求"""
+    user_id: Optional[int] = Field(default=None, description="目标用户主键ID")
+    username: Optional[str] = Field(default=None, description="目标用户工号/用户名")
+
+
 class LoginResponse(BaseModel):
     """登录成功响应"""
     access_token: str = Field(..., description="JWT 访问令牌")
@@ -67,6 +73,20 @@ class UserCreateRequest(BaseModel):
     phone: Optional[str] = Field(None, description="联系手机号")
 
 
+class UserWarehouseSummary(BaseModel):
+    """人员已授权经办库藏摘要 (用于人员列表与顶栏联动)"""
+    model_config = ConfigDict(from_attributes=True)
+    warehouse_code: str = Field(..., description="仓库编码")
+    warehouse_name: str = Field(..., description="仓库名称")
+    warehouse_level: str = Field(default="MAIN_GROUP", description="仓库层级")
+    can_view: int = Field(default=1, description="查看准入权限")
+    can_apply: int = Field(default=0, description="申领权限")
+    can_inbound: int = Field(default=0, description="验收入库权限")
+    can_outbound: int = Field(default=0, description="发料出库权限")
+    can_stocktake: int = Field(default=0, description="盘点权限")
+    can_transfer: int = Field(default=0, description="调拨权限")
+
+
 class UserResponse(BaseModel):
     """人员信息响应"""
     model_config = ConfigDict(from_attributes=True)
@@ -77,9 +97,11 @@ class UserResponse(BaseModel):
     role_code: str
     dept_id: int
     dept_code: str
+    dept_name: Optional[str] = None
     phone_masked: Optional[str] = None
     status: int
     created_at: datetime
+    authorized_warehouses: List[UserWarehouseSummary] = []
 
 
 
@@ -793,6 +815,8 @@ class UserWarehousePermResponse(BaseModel):
     user_id: int
     username: str
     warehouse_code: str
+    warehouse_name: Optional[str] = None
+    warehouse_level: Optional[str] = None
     can_view: int
     can_apply: int
     can_inbound: int
@@ -801,6 +825,23 @@ class UserWarehousePermResponse(BaseModel):
     can_transfer: int
     updated_by: str
     updated_at: datetime
+
+
+class UserWarehousePermBatchItem(BaseModel):
+    """批量设置单个仓库细粒度权限条目"""
+    warehouse_code: str = Field(..., description="仓库编码")
+    can_view: int = Field(default=1, description="查看准入权限")
+    can_apply: int = Field(default=0, description="申领权限")
+    can_inbound: int = Field(default=0, description="验收入库权限")
+    can_outbound: int = Field(default=0, description="发料出库权限")
+    can_stocktake: int = Field(default=0, description="盘点权限")
+    can_transfer: int = Field(default=0, description="调拨权限")
+
+
+class UserWarehousePermBatchRequest(BaseModel):
+    """批量更新人员库藏细粒度权限矩阵请求载荷"""
+    user_id: int = Field(..., description="目标人员用户ID")
+    perms: List[UserWarehousePermBatchItem] = Field(..., description="全量仓库权限矩阵清单")
 
 
 class WarehouseNodeCreateRequest(BaseModel):

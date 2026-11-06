@@ -3,6 +3,7 @@
 本模块负责在系统首次启动或数据库重置时注入完备的基础科室、三级角色账号、双维产品分类与字典、主库批次库存及初始 6W 流转日志。
 """
 
+import json
 import logging
 from datetime import date, datetime, timedelta
 from decimal import Decimal
@@ -1532,6 +1533,99 @@ def init_spn_spec_and_rbac_seeds(db: Session) -> bool:
         db.add_all(perms)
         db.commit()
 
-    logger.info("真实医院 SPD 四级字典、规格体系、供应商档案与用户-仓库 RBAC 细粒度权限矩阵注入完成")
+    # =========================================================================
+    # 6. 初始化 Agentic RAG 树状知识库目录、医疗规范文档资产与 Modular RAG 全局配置
+    # =========================================================================
+    from app.models.rag_agent_models import (
+        SpdRagCategoryTree,
+        SpdRagDocument,
+        SpdRagChunk,
+        SpdModularRagConfig
+    )
+    from app.services.rag_modular_engine import CHUNKER_REGISTRY
+
+    if db.query(SpdRagCategoryTree).count() == 0:
+        logger.info("初始化 Agentic RAG 树状分类目录与医疗规范文档底座...")
+        cat1 = SpdRagCategoryTree(parent_id=0, category_code="CAT_REGULATION", category_name="国家医疗器械法规与首营准入标准", sort_order=1, description="国家药监局法规、医疗器械经营许可证准入标准", icon_name="shield", doc_count=1)
+        cat2 = SpdRagCategoryTree(parent_id=0, category_code="CAT_MAIN_STOCK", category_name="主库验收入库与FEFO近效期调拨制度", sort_order=2, description="主库总仓收货、两级验收入库、近效期先出管理制度", icon_name="package", doc_count=1)
+        cat3 = SpdRagCategoryTree(parent_id=0, category_code="CAT_CLINICAL_PACK", category_name="临床科室手术定数包与耗材使用指南", sort_order=3, description="骨科、心血管等临床病区二级库定数包与申领SOP", icon_name="document", doc_count=1)
+        cat4 = SpdRagCategoryTree(parent_id=0, category_code="CAT_UDI_RECALL", category_name="高值耗材一物一码与不良事件召回规程", sort_order=4, description="UDI全流程追溯、不良反应监测与国家器械召回处置", icon_name="search", doc_count=1)
+        cat5 = SpdRagCategoryTree(parent_id=0, category_code="CAT_FINANCE_AUDIT", category_name="医院财务耗占比考核与精算审计准则", sort_order=5, description="多科室成本核算、盘点损耗审计与带量集采控费标准", icon_name="finance", doc_count=1)
+        db.add_all([cat1, cat2, cat3, cat4, cat5])
+        db.flush()
+
+        docs_seed = [
+            (cat1.id, "DOC-REG-001", "国家药品监督管理局《医疗器械监督管理条例》首营企业与资质准入准则", "markdown", "RECURSIVE_CHAR",
+             "# 医疗器械监督管理条例与首营资质准入规范\n\n## 第一章 总则与资质合规\n第一条 为了保障医疗器械安全、有效，保障人体健康和生命安全，制定本条例。\n第二条 从事医疗器械经营的企业必须取得《医疗器械经营许可证》或第二类医疗器械经营备案凭证。\n第三条 医疗机构采购医疗器械，必须严格查验供货企业营业执照、经营许可证及法定代表人和业务代表授权书原件，未经查验通过严禁采购与接单发货。"),
+            (cat2.id, "DOC-STK-002", "三甲医院医用耗材主库验收与FEFO近效期先出调拨管理制度", "markdown", "SENTENCE_WINDOW",
+             "【主库验收入库总则】供应商到货送达后，主库验收员必须核对随货同行单原件，核实品名、规格、出厂批号与有效截止日期。\n【两级验收入库联动】外部供应商在协同门户发货后，系统自动同步生成待验收入库单。\n【FEFO调拨原则】出库调拨严格遵循近效期先出(First Expire First Out)，对剩余效期不足6个月的批次优先分发至高周转病区。"),
+            (cat3.id, "DOC-PCK-003", "临床骨科关节置换与心血管介入手术定数包配置规程", "markdown", "PARENT_CHILD",
+             "# 临床手术定数包配置规程手册\n\n## 一、骨科膝关节置换定数包 (Pack-Ortho-01)\n适用科室：骨科病区二级库与手术室。\n基础耗材包含：锁定加压接骨板2块、钛合金骨水泥螺钉10支、高频电刀笔1支、医用无菌敷料贴(10cm*11.5cm)10片。\n申领流程：手术前2小时由二级库护士在系统起草申领单，主库审核通过后按需出库。\n\n## 二、心内科冠脉介入定数包 (Pack-Cardio-02)\n适用科室：心血管内科导管室。\n基础耗材包含：药物洗脱冠脉支架系统1套、造影导丝2条、压力泵1只，严格扫码绑定患者。"),
+            (cat4.id, "DOC-UDI-004", "高值医用耗材国家统一UDI一物一码全生命周期流转追溯标准", "markdown", "MARKDOWN_HEADER",
+             "# 高值医用耗材一物一码追溯规程\n\n## 1. 唯一标识解析标准\nUDI包含DI(器械标识)与PI(生产标识)。PI必须涵盖生产批号(Lot)、序列号(SN)及有效期至。\n\n## 2. 6W全流程人物流转追溯链条\nWho(操作人)、When(时间戳)、Where(科室仓库)、What(物资品规)、Why(业务类型)、How(单据凭证)。数据永久留痕，禁止篡改。\n\n## 3. 突发不良事件与问题批次召回\n一旦接到国家药监局或厂家召回通告，系统质管智能体立即锁定该批次在库与在途库存，一键冻结。"),
+            (cat5.id, "DOC-FIN-005", "多科室医疗耗材成本精算、盘点损耗核算与财务对账准则", "markdown", "TABLE_AWARE",
+             "【表格字段: 科室名称 | 耗占比警戒线 | 盘点损耗率上限 | 财务审计频次】\n| 心血管内科 | 30.0% | 0.8% | 每月1次 |\n| 骨科病区 | 35.0% | 1.5% | 每月1次 |\n| 普外科病区 | 25.0% | 1.0% | 每月1次 |\n| 急诊ICU | 28.0% | 1.2% | 每季度1次 |\n\n注：全院各二级库月末独立盘点盈亏必须在次月3日前完成对账签字，四联凭证送财务科核算。")
+        ]
+
+        for cid, dcode, dtitle, ftype, strat, raw in docs_seed:
+            chunker = CHUNKER_REGISTRY.get(strat, CHUNKER_REGISTRY["RECURSIVE_CHAR"])
+            c_items = chunker.chunk(raw, dcode)
+            doc_obj = SpdRagDocument(
+                category_id=cid,
+                doc_code=dcode,
+                doc_title=dtitle,
+                file_type=ftype,
+                file_size_kb=len(raw.encode("utf-8")) // 1024 or 1,
+                doc_status="STAGE_6_GRAPH_READY",
+                selected_chunk_strategy=strat,
+                chunk_count=len(c_items),
+                graph_entity_count=len(c_items) * 2,
+                raw_content=raw,
+                agent_decision_reason=f"由智能体 6A (分块策略决策子智能体) 自主推荐采用 [{strat}] 策略切分。"
+            )
+            db.add(doc_obj)
+            db.flush()
+            for idx, item in enumerate(c_items):
+                db.add(SpdRagChunk(
+                    doc_id=doc_obj.id,
+                    chunk_index=idx,
+                    chunk_uid=item["chunk_uid"],
+                    parent_chunk_uid=item.get("parent_chunk_uid"),
+                    chunk_text=item["chunk_text"],
+                    chunk_size=item["chunk_size"],
+                    strategy_applied=strat,
+                    metadata_json=json.dumps(item.get("metadata", {}), ensure_ascii=False)
+                ))
+
+        # 初始化 Modular RAG 配置
+        if db.query(SpdModularRagConfig).count() == 0:
+            db.add(SpdModularRagConfig(
+                config_key="GLOBAL_CONFIG",
+                enable_intent_classify=1,
+                enable_query_rewrite=1,
+                max_rewrite_loops=3,
+                rewrite_threshold=0.85,
+                enable_subquery_decompose=1,
+                enable_dense_vector=1,
+                enable_bm25_sparse=1,
+                enable_graph_rag=1,
+                top_k_retrieval=15,
+                enable_reranker=1,
+                rerank_threshold=0.55,
+                enable_context_compression=1,
+                enable_citation_source=1,
+                active_embedding_model="bge-m3:latest",
+                active_llm_provider="ollama",
+                active_chat_model="qwen3.5:2b",
+                mimo_base_url="https://api.xiaomi.com/v1",
+                mimo_model_name="mimo-v2.6-flash",
+                langsmith_enabled=1,
+                langsmith_project="Personal",
+                langsmith_endpoint="https://api.smith.langchain.com"
+            ))
+
+        db.commit()
+
+    logger.info("真实医院 SPD 四级字典、规格体系、供应商档案、RBAC权限矩阵与 Agentic RAG 知识底座初始化完成")
     return True
 

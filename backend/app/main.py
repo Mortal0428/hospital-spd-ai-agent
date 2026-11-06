@@ -30,6 +30,7 @@ from app.routers.secondary_warehouse_router import router as sec_wh_router
 from app.routers.workflow_log_router import router as log_router
 from app.routers.stats_print_router import router as stats_print_router
 from app.routers.extended_spd_router import router as extended_spd_router
+from app.routers.rag_agent_hub_router import router as rag_agent_hub_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("spd.main")
@@ -60,6 +61,14 @@ async def lifespan(app: FastAPI):
         finally:
             db.close()
         logger.info("种子数据校验完毕，系统就绪")
+
+        # 4. 自动激活飞书官方 SDK 长连接守护服务 (反向 WebSocket 常驻监听)
+        try:
+            from app.services.feishu_ws_service import feishu_ws_service
+            feishu_ws_service.start_in_background()
+            logger.info("飞书官方 SDK 反向 WebSocket 长连接守护线程已激活")
+        except Exception as feishu_err:
+            logger.warning(f"启动飞书长连接守护服务降级跳过: {feishu_err}")
     except Exception as exc:
         logger.error(f"系统启动初始化致命异常: {exc}", exc_info=True)
         raise exc
@@ -117,6 +126,7 @@ app.include_router(sec_wh_router, prefix="/api/v1")
 app.include_router(log_router, prefix="/api/v1")
 app.include_router(stats_print_router, prefix="/api/v1")
 app.include_router(extended_spd_router)
+app.include_router(rag_agent_hub_router, prefix="/api/v1")
 
 # 挂载本地 Wallpaper Engine 4K 创意工坊动态视频与原画静态资源服务
 from fastapi.staticfiles import StaticFiles

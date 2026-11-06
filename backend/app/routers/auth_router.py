@@ -18,15 +18,18 @@ from app.core.security import (
     mask_phone
 )
 from app.models.spd_models import SysDepartment, SysUser
+from app.models.spd_extended_models import SysUserWarehousePerm, SpdWarehouseNode
 from app.schemas.spd_schemas import (
     ApiResponse,
     LoginRequest,
     LoginResponse,
+    SwitchTokenRequest,
     UserCreateRequest,
     UserUpdateRequest,
     UserResetPasswordRequest,
     UserBatchActionRequest,
     UserResponse,
+    UserWarehouseSummary,
     DepartmentResponse
 )
 
@@ -76,6 +79,84 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
         dept_name=dept_name
     )
     return ApiResponse(code=200, msg="登录成功", data=resp_data)
+
+
+@router.post("/auth/switch-token", response_model=ApiResponse[LoginResponse])
+def switch_user_token(payload: SwitchTokenRequest, db: Session = Depends(get_db)):
+    """快速切换操作人员会话并动态签发合法的标准 JWT Access Token
+
+    @param: payload (SwitchTokenRequest) 切换目标人员标识 (user_id 或 username)
+    @param: db (Session) 数据库活动会话
+    @returns: ApiResponse[LoginResponse] 包含新生成的合法 JWT 令牌与用户档案
+    @route: POST /api/v1/auth/switch-token
+    @throws: HTTPException(404) 当目标用户不存在或已被停用软删除时抛出
+    """
+    query = db.query(SysUser).filter(SysUser.is_deleted == 0)
+    if payload.user_id:
+        user = query.filter(SysUser.id == payload.user_id).first()
+    elif payload.username:
+        user = query.filter(SysUser.username == payload.username).first()
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请提供目标用户的 user_id 或 username")
+
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未找到指定的操作人员档案")
+
+    if user.status != 1:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="目标人员账号已被停用冻结，无法切换")
+
+    dept = db.query(SysDepartment).filter(SysDepartment.id == user.dept_id).first()
+    dept_name = dept.dept_name if dept else (user.dept_code or "未知科室")
+
+    token_data = {
+        "sub": user.username,
+        "user_id": user.id,
+        "real_name": user.real_name,
+        "role_code": user.role_code,
+        "dept_id": user.dept_id,
+        "dept_code": user.dept_code,
+        "dept_name": dept_name
+    }
+    access_token = create_access_token(token_data)
+
+    resp_data = LoginResponse(
+        access_token=access_token,
+        token_type="bearer",
+        user_id=user.id,
+        username=user.username,
+        real_name=user.real_name,
+        role_code=user.role_code,
+        dept_id=user.dept_id,
+        dept_code=user.dept_code,
+        dept_name=dept_name
+    )
+    return ApiResponse(code=200, msg="身份会话切换成功，已动态签发合法 JWT 令牌", data=resp_data)
+
+
+@router.get("/auth/switchable-users", response_model=ApiResponse[list])
+def get_switchable_users(db: Session = Depends(get_db)):
+    """获取全院可切换操作人员列表（全员可读，仅含脱敏基础信息，用于多岗位会话切换）
+    @param db: Session 数据库活动会话
+    @returns: ApiResponse[list] 可切换人员列表
+    @route: GET /api/v1/auth/switchable-users
+    @throws: 无
+    """
+    users = db.query(SysUser).filter(SysUser.is_deleted == 0, SysUser.status == 1).order_by(SysUser.id.asc()).all()
+    dept_map = {d.id: d.dept_name for d in db.query(SysDepartment).all()}
+    data = [
+        {
+            "id": u.id,
+            "username": u.username,
+            "real_name": u.real_name,
+            "role_code": u.role_code,
+            "dept_id": u.dept_id,
+            "dept_code": u.dept_code,
+            "dept_name": dept_map.get(u.dept_id, "科室")
+        }
+        for u in users
+    ]
+    return ApiResponse(code=200, msg="获取全院可切换人员成功", data=data)
+
 
 
 @router.get("/users/me", response_model=ApiResponse[LoginResponse])
@@ -145,7 +226,43 @@ def list_users(
     if dept_id:
         query = query.filter(SysUser.dept_id == dept_id)
     users = query.order_by(SysUser.id.asc()).all()
-    data = [UserResponse.model_validate(u) for u in users]
+
+    # 预加载部门名称
+    dept_map = {d.id: d.dept_name for d in db.query(SysDepartment).all()}
+    # 预加载全院仓库节点字典
+    wh_nodes = {w.warehouse_code: w for w in db.query(SpdWarehouseNode).all()}
+    # 预加载人员已生效的经办库藏权限条目 (can_view == 1)
+    user_ids = [u.id for u in users]
+    all_perms = db.query(SysUserWarehousePerm).filter(
+        SysUserWarehousePerm.user_id.in_(user_ids),
+        SysUserWarehousePerm.can_view == 1
+    ).all() if user_ids else []
+
+    perms_by_user = {}
+    for p in all_perms:
+        perms_by_user.setdefault(p.user_id, []).append(p)
+
+    data = []
+    for u in users:
+        u_resp = UserResponse.model_validate(u)
+        u_resp.dept_name = dept_map.get(u.dept_id, u.dept_code)
+        u_perms = perms_by_user.get(u.id, [])
+        wh_summaries = []
+        for p in u_perms:
+            wh = wh_nodes.get(p.warehouse_code)
+            wh_summaries.append(UserWarehouseSummary(
+                warehouse_code=p.warehouse_code,
+                warehouse_name=wh.warehouse_name if wh else p.warehouse_code,
+                warehouse_level=wh.warehouse_level if wh else "MAIN_GROUP",
+                can_view=p.can_view,
+                can_apply=p.can_apply,
+                can_inbound=p.can_inbound,
+                can_outbound=p.can_outbound,
+                can_stocktake=p.can_stocktake,
+                can_transfer=p.can_transfer
+            ))
+        u_resp.authorized_warehouses = wh_summaries
+        data.append(u_resp)
     return ApiResponse(code=200, msg="获取人员列表成功", data=data)
 
 

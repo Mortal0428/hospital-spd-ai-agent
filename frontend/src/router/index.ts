@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
+import { ElMessage } from 'element-plus';
 import MainLayout from '@/layouts/MainLayout.vue';
 import LoginView from '@/views/LoginView.vue';
 import { useUserStore } from '@/stores/userStore';
@@ -66,7 +67,7 @@ const routes: RouteRecordRaw[] = [
         path: 'procurement',
         name: 'HospitalProcurement',
         component: () => import('@/views/HospitalProcurementView.vue'),
-        meta: { title: '7. 采购管理与准入中心', roles: ['sys_admin', 'dept_manager', 'secondary_user'] }
+        meta: { title: '7. 采购管理与准入中心', roles: ['sys_admin', 'dept_manager', 'secondary_user', 'finance_auditor'] }
       },
       {
         path: 'supplier-portal',
@@ -79,6 +80,12 @@ const routes: RouteRecordRaw[] = [
         name: 'UserManagement',
         component: () => import('@/views/UserManagementView.vue'),
         meta: { title: '9. 全院人员管理与RBAC权限中心', roles: ['sys_admin'] }
+      },
+      {
+        path: 'rag-hub',
+        name: 'RagAgentHub',
+        component: () => import('@/views/RagAgentHubView.vue'),
+        meta: { title: '10. Agentic RAG 知识工程与控制中台', roles: ['sys_admin', 'dept_manager', 'secondary_user', 'finance_auditor'] }
       }
     ]
   }
@@ -93,7 +100,7 @@ const router = createRouter({
  * 全局前置导航守卫
  * 处理网页标题同步、公共免登录页面放行与受保护路由鉴权
  */
-router.beforeEach((to, _from, next) => {
+router.beforeEach((to, from, next) => {
   if (to.meta.title) {
     document.title = `${to.meta.title} - 医院医疗物资全链路管理系统`;
   }
@@ -111,14 +118,20 @@ router.beforeEach((to, _from, next) => {
     // 已登录状态下访问独立登录页，自动进入工作台
     next({ path: '/dict' });
   } else if (userStore.isLoggedIn && to.meta.roles && Array.isArray(to.meta.roles)) {
-    // 细粒度岗位角色鉴权：非管理员访问无授权页面强制拦截重定向
+    // 细粒度岗位角色鉴权：非管理员访问无授权页面明确告警提示并取消无响应回弹
     const currentRole = userStore.currentUser.roleCode;
     if (currentRole !== 'sys_admin' && !to.meta.roles.includes(currentRole)) {
-      if (currentRole === 'secondary_user') next({ path: '/secondary' });
-      else if (currentRole === 'finance_auditor') next({ path: '/finance' });
-      else if (currentRole === 'supplier_user') next({ path: '/procurement' });
-      else if (currentRole === 'dept_manager') next({ path: '/general' });
-      else next({ path: '/showcase' });
+      ElMessage.warning(`无权访问：当前岗位角色 [${currentRole}] 尚未开放 [${to.meta.title || to.path}] 模块权限，请联系管理员开通`);
+      // 若已有合法前置页面，保留在当前页；若为直接敲地址，回退至该角色主页
+      if (from && from.path && from.path !== to.path && from.path !== '/') {
+        next(false);
+      } else {
+        if (currentRole === 'secondary_user') next({ path: '/secondary' });
+        else if (currentRole === 'finance_auditor') next({ path: '/finance' });
+        else if (currentRole === 'supplier_user') next({ path: '/supplier-portal' });
+        else if (currentRole === 'dept_manager') next({ path: '/general' });
+        else next({ path: '/showcase' });
+      }
       return;
     }
     next();

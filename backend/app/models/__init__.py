@@ -24,7 +24,17 @@ from app.models.spd_extended_models import (
     SpdProductSpec,
     SpdSupplierProfile,
     SysUserWarehousePerm,
-    SpdPriceAdjustLog
+    SpdPriceAdjustLog,
+    SpdRecallPatientFollowUp
+)
+from app.models.rag_agent_models import (
+    SpdRagCategoryTree,
+    SpdRagDocument,
+    SpdRagChunk,
+    SpdModularRagConfig,
+    SpdAgentExecutionTrace,
+    SpdAgentModelConfig,
+    SpdAgentChatMessage
 )
 
 __all__ = [
@@ -49,5 +59,13 @@ __all__ = [
     "SpdProductSpec",
     "SpdSupplierProfile",
     "SysUserWarehousePerm",
-    "SpdPriceAdjustLog"
+    "SpdPriceAdjustLog",
+    "SpdRecallPatientFollowUp",
+    "SpdRagCategoryTree",
+    "SpdRagDocument",
+    "SpdRagChunk",
+    "SpdModularRagConfig",
+    "SpdAgentExecutionTrace",
+    "SpdAgentModelConfig",
+    "SpdAgentChatMessage"
 ]

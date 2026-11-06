@@ -68,8 +68,12 @@ export function auditSupplierQualification(data: {
   supplier_name: string;
   license_no: string;
   license_expiry_date: string;
+  social_credit_code?: string;
+  contact_person?: string;
+  contact_phone?: string;
   audit_action: 'QUAL_PENDING' | 'QUAL_APPROVED' | 'QUAL_REJECTED';
-}): Promise<{ supplier_code: string; license_no: string; qual_audit_status: string; affected_orders: number }> {
+  audit_remark?: string;
+}): Promise<{ supplier_code: string; supplier_name?: string; license_no: string; qual_audit_status: string; audit_remark?: string; affected_orders: number }> {
   return httpPost('/ext/supplier-purchase/qual-audit', data);
 }
 

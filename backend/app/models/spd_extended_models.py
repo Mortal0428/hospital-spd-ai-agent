@@ -315,6 +315,7 @@ class SpdSupplierProfile(Base):
     supply_categories: Mapped[str] = mapped_column(String(255), default="普耗,高值,骨科,心内", nullable=False, comment="主营供货物资品类范围")
     qual_status: Mapped[str] = mapped_column(String(32), default="QUAL_APPROVED", nullable=False, comment="资质状态: QUAL_APPROVED-审核通过正常供货, QUAL_PENDING-待审, QUAL_EXPIRED-资质已到期熔断")
     status: Mapped[str] = mapped_column(String(32), default="ACTIVE", nullable=False, comment="档案启用状态: ACTIVE-启用, DISABLED-停用")
+    audit_remark: Mapped[Optional[str]] = mapped_column(Text, nullable=True, comment="审核结论或驳回原因说明")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False, comment="建档时间")
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False, comment="最后更新时间")
 
@@ -362,4 +363,25 @@ class SpdPriceAdjustLog(Base):
     adjust_doc_no: Mapped[str] = mapped_column(String(128), default="", nullable=False, comment="调价政策依据文件号/文号")
     operator_name: Mapped[str] = mapped_column(String(64), nullable=False, comment="调价操作人员姓名与工号")
     effective_time: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False, comment="调价实际生效执行时间")
+
+
+class SpdRecallPatientFollowUp(Base):
+    """医疗器械不良事件召回患者追访记录表 ORM 映射模型"""
+    __tablename__ = "spd_recall_patient_follow_up"
+    __table_args__ = {
+        "mysql_engine": "InnoDB",
+        "mysql_charset": "utf8mb4",
+        "comment": "医疗器械不良事件召回已植入患者紧急随访跟踪表"
+    }
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True, comment="随访记录主键ID")
+    udi_sn: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False, comment="高值耗材唯一UDI码")
+    batch_no: Mapped[str] = mapped_column(String(64), index=True, nullable=False, comment="生产批号")
+    patient_inpatient_no: Mapped[str] = mapped_column(String(64), index=True, nullable=False, comment="患者住院号")
+    patient_name_masked: Mapped[str] = mapped_column(String(64), nullable=False, comment="患者脱敏姓名")
+    follow_up_status: Mapped[str] = mapped_column(String(32), default="PENDING_CONTACT", nullable=False, comment="随访状态: PENDING_CONTACT-待联系, CONTACTED_NORMAL-已电话随访(正常), ADVERSE_OBSERVED-发现不良反应(需复查), COMPENSATED-厂家理赔已闭环")
+    follow_up_doctor: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, comment="随访主治医护姓名")
+    follow_up_remark: Mapped[Optional[str]] = mapped_column(String(512), nullable=True, comment="随访医学观察记录与处置说明")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False, comment="最后随访记录时间")
+
 

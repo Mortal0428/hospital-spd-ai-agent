@@ -1170,12 +1170,26 @@
       title="从本科室在库台账选品开具跨病区调拨单"
       @confirm="handleConfirmSecSelectForTransfer"
     />
+
+    <!-- 智能体 3: 临床二级库自然语言申领与耗材规范问答智能体 (LangGraph + HITL 架构) -->
+    <AgentChatWidget
+      floating
+      agent-id="sec_apply"
+      agent-title="二级库申领与问答智能体"
+      architecture-tag="LangGraph StateGraph + HITL"
+      :preset-questions="[
+        '急诊科需要申领20包无菌纱布',
+        '查询静脉留置针临床使用规范',
+        '查询当前科室待办审批事项'
+      ]"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import AgentChatWidget from '@/components/AgentChatWidget.vue';
 import StocktakePlanWorkbench from '@/components/StocktakePlanWorkbench.vue';
 import SelectSecInventoryDialog from '@/components/SelectSecInventoryDialog.vue';
 import { ElMessage, ElMessageBox, ElNotification } from 'element-plus';

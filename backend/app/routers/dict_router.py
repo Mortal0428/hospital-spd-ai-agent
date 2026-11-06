@@ -48,6 +48,7 @@ from app.schemas.spd_schemas import (
     SupplierProfileResponse,
     UserWarehousePermUpdateRequest,
     UserWarehousePermResponse,
+    UserWarehousePermBatchRequest,
     WarehouseNodeCreateRequest,
     WarehouseNodeUpdateRequest,
     WarehouseNodeResponse
@@ -1009,8 +1010,85 @@ def get_user_warehouse_perms(
     """
     target_uid = user_id if (user_id and current_user.role_code == "sys_admin") else current_user.user_id
     perms = db.query(SysUserWarehousePerm).filter(SysUserWarehousePerm.user_id == target_uid).all()
-    data = [UserWarehousePermResponse.model_validate(p) for p in perms]
+    wh_nodes = {w.warehouse_code: w for w in db.query(SpdWarehouseNode).all()}
+
+    data = []
+    for p in perms:
+        item = UserWarehousePermResponse.model_validate(p)
+        if p.warehouse_code in wh_nodes:
+            item.warehouse_name = wh_nodes[p.warehouse_code].warehouse_name
+            item.warehouse_level = wh_nodes[p.warehouse_code].warehouse_level
+        data.append(item)
     return ApiResponse(code=200, msg="获取用户仓库细粒度权限成功", data=data)
+
+
+@router.post("/user-warehouse-perms/batch", response_model=ApiResponse[List[UserWarehousePermResponse]])
+def batch_save_user_warehouse_perms(
+    payload: UserWarehousePermBatchRequest,
+    db: Session = Depends(get_db),
+    admin_ctx: CurrentUserContext = Depends(require_roles(["sys_admin"]))
+):
+    """信息科管理员批量下发并持久化人员的仓库细粒度授权矩阵
+
+    @param payload: (UserWarehousePermBatchRequest) 包含用户ID与全量仓库权限列表
+    @param db: (Session) 数据库活动会话
+    @param admin_ctx: (CurrentUserContext) 信息科系统管理员鉴权
+    @returns: ApiResponse[List[UserWarehousePermResponse]] 保存后的全量权限记录列表
+    @route: POST /api/v1/dict/user-warehouse-perms/batch
+    @throws: HTTPException(404) 当目标用户不存在时抛出
+    """
+    target_user = db.query(SysUser).filter(SysUser.id == payload.user_id).first()
+    if not target_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="目标人员账号不存在")
+
+    wh_nodes = {w.warehouse_code: w for w in db.query(SpdWarehouseNode).all()}
+
+    existing_perms = {
+        p.warehouse_code: p
+        for p in db.query(SysUserWarehousePerm).filter(SysUserWarehousePerm.user_id == payload.user_id).all()
+    }
+
+    saved_perms = []
+    for item in payload.perms:
+        if item.warehouse_code in existing_perms:
+            p = existing_perms[item.warehouse_code]
+            p.can_view = item.can_view
+            p.can_apply = item.can_apply
+            p.can_inbound = item.can_inbound
+            p.can_outbound = item.can_outbound
+            p.can_stocktake = item.can_stocktake
+            p.can_transfer = item.can_transfer
+            p.updated_by = admin_ctx.username
+            saved_perms.append(p)
+        else:
+            p = SysUserWarehousePerm(
+                user_id=payload.user_id,
+                username=target_user.username,
+                warehouse_code=item.warehouse_code,
+                can_view=item.can_view,
+                can_apply=item.can_apply,
+                can_inbound=item.can_inbound,
+                can_outbound=item.can_outbound,
+                can_stocktake=item.can_stocktake,
+                can_transfer=item.can_transfer,
+                updated_by=admin_ctx.username
+            )
+            db.add(p)
+            saved_perms.append(p)
+
+    db.commit()
+    for p in saved_perms:
+        db.refresh(p)
+
+    result_data = []
+    for p in saved_perms:
+        res_item = UserWarehousePermResponse.model_validate(p)
+        if p.warehouse_code in wh_nodes:
+            res_item.warehouse_name = wh_nodes[p.warehouse_code].warehouse_name
+            res_item.warehouse_level = wh_nodes[p.warehouse_code].warehouse_level
+        result_data.append(res_item)
+
+    return ApiResponse(code=200, msg="全院人员库藏细粒度权限矩阵批量持久化保存成功", data=result_data)
 
 
 @router.post("/user-warehouse-perms", response_model=ApiResponse[UserWarehousePermResponse])

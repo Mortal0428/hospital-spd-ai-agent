@@ -18,6 +18,8 @@ if not hasattr(bcrypt, "__about__"):
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 from app.core.config import settings
+from app.core.database import get_db
+from app.models.spd_models import SysUser, SysDepartment
 
 # 密码哈希上下文
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -173,44 +175,99 @@ class CurrentUserContext:
 def get_current_user_context(
     auth: Optional[HTTPAuthorizationCredentials] = Depends(security_bearer),
     x_mock_user: Optional[str] = Header(None, alias="X-Mock-User"),
-    x_mock_role: Optional[str] = Header(None, alias="X-Mock-Role")
+    x_mock_role: Optional[str] = Header(None, alias="X-Mock-Role"),
+    db: Session = Depends(get_db)
 ) -> CurrentUserContext:
-    """获取当前已认证用户上下文，支持演示请求头便捷切换三级角色视角
+    """获取当前已认证用户上下文，支持动态数据库查询与演示请求头便捷切换三级角色视角
 
     @param: auth (Optional[HTTPAuthorizationCredentials]) Bearer Token 头部
-    @param: x_mock_user (Optional[str]) 前端演示一键切换用户名请求头 (如 admin, mgr_consumable, nurse_ortho)
+    @param: x_mock_user (Optional[str]) 前端演示一键切换用户名请求头 (如 admin, cyx, mgr_consumable, nurse_ortho)
     @param: x_mock_role (Optional[str]) 前端演示一键切换角色编码请求头
+    @param: db (Session) 数据库活动会话
     @returns: CurrentUserContext 当前用户上下文实例
     @route: 依赖注入链路 backend.app.core.security.get_current_user_context
     @throws: HTTPException(401) 当无法识别身份凭证时抛出
     """
-    # 优先支持演示请求头快捷切换三级角色
+    # 1. 优先通过 X-Mock-User 动态查询数据库识别合法人员 (彻底解决硬编码 6 人导致 cyx/新用户 401 的痛点)
     if x_mock_user:
-        mock_map = {
-            "admin": CurrentUserContext(1, "admin", "赵振华", "sys_admin", 1, "INFO_DEPT", "信息科"),
-            "mgr_consumable": CurrentUserContext(2, "mgr_consumable", "王建国", "dept_manager", 2, "CONSUMABLE_DEPT", "耗材科"),
-            "mgr_equip": CurrentUserContext(3, "mgr_equip", "周天海", "dept_manager", 3, "EQUIP_DEPT", "设备科"),
-            "mgr_finance": CurrentUserContext(4, "mgr_finance", "孙丽娟", "dept_manager", 4, "FINANCE_DEPT", "财务科"),
-            "nurse_ortho": CurrentUserContext(5, "nurse_ortho", "李晓琳", "secondary_user", 5, "SEC_ORTHO", "骨科病区二级库"),
-            "nurse_cardio": CurrentUserContext(6, "nurse_cardio", "陈雅文", "secondary_user", 6, "SEC_CARDIO", "心内科病区二级库")
-        }
-        if x_mock_user in mock_map:
-            return mock_map[x_mock_user]
+        u = db.query(SysUser).filter(SysUser.username == x_mock_user, SysUser.is_deleted == 0).first()
+        if u and u.status == 1:
+            dept = db.query(SysDepartment).filter(SysDepartment.id == u.dept_id).first()
+            dept_name = dept.dept_name if dept else (u.dept_code or "未知科室")
+            return CurrentUserContext(
+                user_id=u.id,
+                username=u.username,
+                real_name=u.real_name,
+                role_code=u.role_code,
+                dept_id=u.dept_id,
+                dept_code=u.dept_code or "INFO_DEPT",
+                dept_name=dept_name
+            )
 
-    # 标准 JWT Bearer Token 解析
+    # 2. 标准 JWT Bearer Token 解析与测试模拟 Token 兼容
     if auth and auth.credentials:
-        payload = decode_access_token(auth.credentials)
+        token_str = auth.credentials.strip()
+        # 若为前端演示模拟 Token：如 spd_token_cyx_123456789
+        if token_str.startswith("spd_token_"):
+            parts = token_str.split("_")
+            if len(parts) >= 3:
+                uname = parts[2]
+                u = db.query(SysUser).filter(SysUser.username == uname, SysUser.is_deleted == 0).first()
+                if u and u.status == 1:
+                    dept = db.query(SysDepartment).filter(SysDepartment.id == u.dept_id).first()
+                    return CurrentUserContext(
+                        user_id=u.id,
+                        username=u.username,
+                        real_name=u.real_name,
+                        role_code=u.role_code,
+                        dept_id=u.dept_id,
+                        dept_code=u.dept_code or "INFO_DEPT",
+                        dept_name=dept.dept_name if dept else "未知科室"
+                    )
+
+        # 尝试标准 JWT 解密
+        try:
+            payload = decode_access_token(token_str)
+            return CurrentUserContext(
+                user_id=payload.get("user_id", 1),
+                username=payload.get("sub", "admin"),
+                real_name=payload.get("real_name", "管理员"),
+                role_code=payload.get("role_code", "sys_admin"),
+                dept_id=payload.get("dept_id", 1),
+                dept_code=payload.get("dept_code", "INFO_DEPT"),
+                dept_name=payload.get("dept_name", "信息科")
+            )
+        except HTTPException:
+            # 若 JWT 解密失败，根据 x_mock_role 尝试安全平滑兜底
+            if x_mock_role:
+                u = db.query(SysUser).filter(SysUser.role_code == x_mock_role, SysUser.status == 1, SysUser.is_deleted == 0).first()
+                if u:
+                    dept = db.query(SysDepartment).filter(SysDepartment.id == u.dept_id).first()
+                    return CurrentUserContext(
+                        user_id=u.id,
+                        username=u.username,
+                        real_name=u.real_name,
+                        role_code=u.role_code,
+                        dept_id=u.dept_id,
+                        dept_code=u.dept_code or "INFO_DEPT",
+                        dept_name=dept.dept_name if dept else "未知科室"
+                    )
+            # 无任何匹配且携带非法令牌时向上抛出异常
+            raise
+
+    # 3. 兜底为系统管理员（便于开发期与无凭证场景平滑过渡）
+    default_admin = db.query(SysUser).filter(SysUser.username == "admin").first()
+    if default_admin:
         return CurrentUserContext(
-            user_id=payload.get("user_id", 1),
-            username=payload.get("sub", "admin"),
-            real_name=payload.get("real_name", "管理员"),
-            role_code=payload.get("role_code", "sys_admin"),
-            dept_id=payload.get("dept_id", 1),
-            dept_code=payload.get("dept_code", "INFO_DEPT"),
-            dept_name=payload.get("dept_name", "信息科")
+            user_id=default_admin.id,
+            username=default_admin.username,
+            real_name=default_admin.real_name,
+            role_code=default_admin.role_code,
+            dept_id=default_admin.dept_id,
+            dept_code=default_admin.dept_code,
+            dept_name="信息科"
         )
 
-    # 默认兜底为管理员（便于开发期与接口测试自动化）
     return CurrentUserContext(1, "admin", "赵振华", "sys_admin", 1, "INFO_DEPT", "信息科")
 
 

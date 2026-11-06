@@ -32,7 +32,7 @@ class ProductDictExtUpdateRequest(BaseModel):
     brand_name: str = Field(default="国产品牌", description="品牌名称")
     supplier_code: str = Field(default="SUP_WEGO_01", description="绑定供应商编码")
     is_disabled: int = Field(default=0, ge=0, le=1, description="停用标记: 0-在用, 1-停用")
-    extra_fields_json: Optional[str] = Field(default=None, description="自定义扩展属性JSON字符串")
+    extra_fields_json: Optional[str] = Field(default=None, description="自定义扩展属性JSON字符串") 
 
 
 class CopyWarehouseRequest(BaseModel):
@@ -103,9 +103,13 @@ class SupplierQualAuditRequest(BaseModel):
     """供应商经营资质上传绑定与医院主科室准入审核请求"""
     supplier_code: str = Field(..., description="供应商编码")
     supplier_name: str = Field(..., description="供应商企业全称")
+    social_credit_code: Optional[str] = Field(default=None, description="统一社会信用代码(18位)")
     license_no: str = Field(..., description="《医疗器械经营许可证》编号")
     license_expiry_date: date = Field(..., description="许可证有效期至")
+    contact_person: Optional[str] = Field(default=None, description="业务代表姓名")
+    contact_phone: Optional[str] = Field(default=None, description="业务代表手机号")
     audit_action: str = Field(default="QUAL_APPROVED", description="准入状态: QUAL_PENDING-上传待审, QUAL_APPROVED-医院审核通过, QUAL_REJECTED-医院驳回")
+    audit_remark: Optional[str] = Field(default=None, description="准入审核意见或合规驳回理由")
 
 
 class PurchaseOrderFlowRequest(BaseModel):

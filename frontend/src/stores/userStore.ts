@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { getRbacMatrix, type UserModulePermissionItem } from '@/api/rbacApi';
-import { httpPost } from '@/api/request';
+import { httpGet, httpPost } from '@/api/request';
 
 /**
  * 系统人员用户信息定义
@@ -80,6 +80,22 @@ export const PRESET_USERS: UserProfile[] = [
     roleCode: 'supplier_user',
     deptCode: 'SUPPLIER_EXT',
     deptName: '威高医疗(供应商协同)'
+  },
+  {
+    id: 8,
+    username: 'cyx',
+    realName: '陈永兴 (系统管理员)',
+    roleCode: 'sys_admin',
+    deptCode: 'INFO_DEPT',
+    deptName: '信息科'
+  },
+  {
+    id: 9,
+    username: 'cyx01',
+    realName: '陈永兴01 (外部供应商代表)',
+    roleCode: 'supplier_user',
+    deptCode: 'SUPPLIER_ORG',
+    deptName: '外部签约供应商'
   }
 ];
 
@@ -103,7 +119,8 @@ export const useUserStore = defineStore('user', {
       permissionList: [] as UserModulePermissionItem[],
       loadingPermissions: false,
       theme: (localStorage.getItem('spd_theme') || 'light') as 'light' | 'dark',
-      currentWarehouseCode: localStorage.getItem('spd_current_warehouse') || 'WH_WEICAI'
+      currentWarehouseCode: localStorage.getItem('spd_current_warehouse') || 'WH_WEICAI',
+      assignedWarehouseList: [] as Array<{ code: string; name: string }>
     };
   },
 
@@ -124,6 +141,9 @@ export const useUserStore = defineStore('user', {
 
       if (state.currentUser.roleCode === 'sys_admin') {
         return [{ code: 'ALL', name: '全院全部仓库 (穿透模式)' }, ...allWarehouses];
+      }
+      if (state.assignedWarehouseList && state.assignedWarehouseList.length > 0) {
+        return state.assignedWarehouseList;
       }
       if (state.currentUser.roleCode === 'dept_manager') {
         return allWarehouses.filter(w => ['WH_WEICAI', 'WH_EQUIP', 'WH_ZONGWU', 'WH_XINXI'].includes(w.code));
@@ -249,6 +269,7 @@ export const useUserStore = defineStore('user', {
           this.isLoggedIn = true;
           this.syncStorage(true, this.currentUser, this.token);
           await this.fetchPermissions();
+          await this.refreshAuthorizedWarehouses();
           return true;
         } else {
           throw new Error('认证中心凭证签发异常');
@@ -359,6 +380,37 @@ export const useUserStore = defineStore('user', {
     setCurrentWarehouse(code: string): void {
       this.currentWarehouseCode = code;
       localStorage.setItem('spd_current_warehouse', code);
+    },
+
+    /**
+     * 动态拉取当前用户在数据库中真实授权的经办库藏列表
+     * @returns {Promise<void>} 异步刷新全局经办仓库列表
+     * @route GET /api/v1/dict/user-warehouse-perms
+     * @throws 网络或鉴权失败时回退到角色默认模板
+     */
+    async refreshAuthorizedWarehouses(): Promise<void> {
+      try {
+        const res = await httpGet<any>(`/dict/user-warehouse-perms?user_id=${this.currentUser.id}`);
+        const list = Array.isArray(res) ? res : (res?.data || []);
+        const validWarehouses = list.filter((p: any) => p.can_view === 1);
+        if (validWarehouses.length > 0) {
+          const mapped = validWarehouses.map((p: any) => ({
+            code: p.warehouse_code,
+            name: p.warehouse_name || p.warehouse_code
+          }));
+          if (this.currentUser.roleCode === 'sys_admin' && !mapped.some((m: any) => m.code === 'ALL')) {
+            this.assignedWarehouseList = [{ code: 'ALL', name: '全院全部仓库 (穿透模式)' }, ...mapped];
+          } else {
+            this.assignedWarehouseList = mapped;
+          }
+          const validCodes = this.authorizedWarehouses.map((w) => w.code);
+          if (!validCodes.includes(this.currentWarehouseCode) && this.authorizedWarehouses.length > 0) {
+            this.setCurrentWarehouse(this.authorizedWarehouses[0].code);
+          }
+        }
+      } catch {
+        // 安全降级至角色静态默认模板
+      }
     },
 
     /**
@@ -474,9 +526,26 @@ export const useUserStore = defineStore('user', {
       if (this.currentUser.roleCode === 'sys_admin') {
         return true;
       }
-      const modPerms = this.permissionMap[moduleCode];
-      if (modPerms && modPerms[actionKey] !== undefined) {
-        return modPerms[actionKey];
+      // 模块编码别名映射兼容表，保障前端与后端各版本契约无缝对齐
+      const aliasMap: Record<string, string[]> = {
+        'DICT_MANAGE': ['DICT_MANAGE', 'DICT_SPEC'],
+        'DICT_SPEC': ['DICT_MANAGE', 'DICT_SPEC'],
+        'FINANCE_AUDIT': ['FINANCE_AUDIT', 'FIN_AUDIT'],
+        'FIN_AUDIT': ['FINANCE_AUDIT', 'FIN_AUDIT'],
+        'WORKFLOW_LOG': ['WORKFLOW_LOG', 'TRACE_LOGS'],
+        'TRACE_LOGS': ['WORKFLOW_LOG', 'TRACE_LOGS'],
+        'SUPPLIER_SHIP': ['SUPPLIER_SHIP', 'SUPPLIER_PORTAL'],
+        'SUPPLIER_PORTAL': ['SUPPLIER_SHIP', 'SUPPLIER_PORTAL'],
+        'PURCHASE_PLAN': ['PURCHASE_PLAN'],
+        'AGENT_HUB': ['AGENT_HUB']
+      };
+
+      const candidateCodes = aliasMap[moduleCode] || [moduleCode];
+      for (const code of candidateCodes) {
+        const modPerms = this.permissionMap[code];
+        if (modPerms && modPerms[actionKey] !== undefined) {
+          return Number(modPerms[actionKey]) === 1;
+        }
       }
       return false;
     }
@@ -512,10 +581,11 @@ export function generateDefaultPermissions(user: UserProfile): UserModulePermiss
     { code: 'HV_RETURN', name: '高值耗材科室退货出库(不可逆)' },
     { code: 'HV_QR_VERIFY', name: '高值一物一码二维码扫码核销' },
     { code: 'SEC_WAREHOUSE', name: '临床二级库全模块管理' },
-    { code: 'PURCHASE_PLAN', name: '多级采购计划与主科审批' },
+    { code: 'PURCHASE_PLAN', name: '多级采购计划与准入审核' },
     { code: 'SUPPLIER_SHIP', name: '外部供应商资质上传与拣货发货' },
     { code: 'WORKFLOW_LOG', name: '全流程业务链路日志 (6W)' },
-    { code: 'FINANCE_AUDIT', name: '统计查询与单据打印中心' }
+    { code: 'FINANCE_AUDIT', name: '统计查询与单据打印中心' },
+    { code: 'AGENT_HUB', name: '6大智能体与知识工程中台' }
   ];
 
   return moduleDefinitions.map((mod, index) => {
@@ -531,13 +601,21 @@ export function generateDefaultPermissions(user: UserProfile): UserModulePermiss
       } else if (mod.code === 'HV_PREP_RECEIVE') {
         v = 1; c = 1; e = 0; d = 0; sc = 1; cs = 0; ap = 0; pr = 1;
       } else if (mod.code === 'DICT_MANAGE') {
-        v = 1; c = 0; e = 0; d = 0; sc = 0; cs = 0; ap = 0; pr = 0; // 护士拥有字典只读查看权，严格限制增删改与调价
+        v = 1; c = 0; e = 0; d = 0; sc = 0; cs = 0; ap = 0; pr = 0;
+      } else if (mod.code === 'PURCHASE_PLAN') {
+        v = 1; c = 1; e = 0; d = 0; sc = 0; cs = 1; ap = 0; pr = 1; // 护士拥有采购计划提报权与撤销权
+      } else if (mod.code === 'AGENT_HUB') {
+        v = 1; c = 0; e = 0; d = 0; sc = 0; cs = 0; ap = 0; pr = 1; // 护士开放使用临床问答与高值追溯智能体
       }
     } else if (isFinance) {
       if (mod.code === 'FINANCE_AUDIT') {
         v = 1; c = 0; e = 0; d = 0; sc = 0; cs = 0; ap = 1; pr = 1;
       } else if (mod.code === 'WORKFLOW_LOG') {
         v = 1; c = 0; e = 0; d = 0; sc = 0; cs = 0; ap = 0; pr = 1;
+      } else if (mod.code === 'PURCHASE_PLAN') {
+        v = 1; c = 0; e = 0; d = 0; sc = 1; cs = 0; ap = 1; pr = 1; // 财务主管拥有采购预算审核与对账权
+      } else if (mod.code === 'AGENT_HUB') {
+        v = 1; c = 0; e = 0; d = 0; sc = 0; cs = 0; ap = 0; pr = 1; // 财务开放使用精算审计智能体与知识库查阅
       }
     } else if (isSupplier) {
       if (mod.code === 'SUPPLIER_SHIP') {
@@ -548,6 +626,8 @@ export function generateDefaultPermissions(user: UserProfile): UserModulePermiss
         v = 1; c = 1; e = 1; d = 0; sc = 1; cs = 1; ap = 1; pr = 1;
       } else if (['HV_PREP_RECEIVE', 'HV_RETURN'].includes(mod.code)) {
         v = 1; c = 0; e = 0; d = 0; sc = 0; cs = 0; ap = 1; pr = 1;
+      } else if (mod.code === 'AGENT_HUB') {
+        v = 1; c = 1; e = 1; d = 0; sc = 1; cs = 0; ap = 1; pr = 1;
       }
     }
 

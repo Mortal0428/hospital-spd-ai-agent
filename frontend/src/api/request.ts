@@ -24,10 +24,26 @@ const service: AxiosInstance = axios.create({
 // 请求拦截器
 service.interceptors.request.use(
   (config) => {
+    // 若请求载荷为 FormData 文件流，必须彻底清除各种大小写的 Content-Type，让浏览器原生自适应构建带 boundary 的 multipart/form-data
+    if (config.data instanceof FormData) {
+      if (config.headers && typeof (config.headers as any).delete === 'function') {
+        (config.headers as any).delete('Content-Type');
+        (config.headers as any).delete('content-type');
+      }
+      delete (config.headers as any)['Content-Type'];
+      delete (config.headers as any)['content-type'];
+    }
+
     // 注入 JWT 鉴权凭据 Authorization: Bearer <token>
     const token = localStorage.getItem('spd_token');
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    // 智能体复杂推理、Coze 云端协同与飞书通知接口自适应放宽超时至 60 秒，杜绝过早中断
+    const reqUrl = config.url || '';
+    if (reqUrl.includes('/rag-hub/agent/') || reqUrl.includes('/rag-hub/coze/') || reqUrl.includes('/rag-hub/feishu/')) {
+      config.timeout = 60000;
     }
 
     // 提取当前操作用户工号与角色标记

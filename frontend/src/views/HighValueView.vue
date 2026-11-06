@@ -502,6 +502,142 @@
             </el-table>
           </div>
         </el-tab-pane>
+
+        <!-- =====================================================================
+             Tab 8: 不良事件召回患者追访中枢 (recall-trace) (方案 A 落地)
+             ===================================================================== -->
+        <el-tab-pane label="不良事件召回患者追访中枢" name="recall-trace">
+          <div class="tab-content-area">
+            <div class="pane-action-bar">
+              <div class="action-desc-text">
+                <SvgIcon name="shield" :size="15" color="var(--color-danger)" />
+                <span>医疗器械不良事件紧急召回与患者穿透追访中枢 · 穿透全院在库锁定件数与体内植入患者清册，跟踪医学随访闭环并导出国家药监四联处置报告</span>
+              </div>
+              <div class="action-btn-group" style="display: flex; gap: 8px; align-items: center;">
+                <el-select
+                  v-model="selectedRecallBatch"
+                  placeholder="选择召回批号 (如 B20261012)"
+                  clearable
+                  filterable
+                  style="width: 260px;"
+                  @change="handleFetchRecallTrace(selectedRecallBatch)"
+                >
+                  <el-option
+                    v-for="b in recallBatchOptions"
+                    :key="b.batch_no"
+                    :label="`${b.batch_no} (${b.product_name} · 总${b.total_items}件/植入${b.implanted_count}人)`"
+                    :value="b.batch_no"
+                  />
+                </el-select>
+                <el-button
+                  type="primary"
+                  size="small"
+                  :loading="loadingRecall"
+                  @click="handleFetchRecallTrace(selectedRecallBatch)"
+                >
+                  <SvgIcon name="search" :size="13" style="margin-right: 4px;" />
+                  穿透追查患者
+                </el-button>
+                <el-button
+                  type="warning"
+                  plain
+                  size="small"
+                  :disabled="!activeBatchSummary"
+                  @click="openRecallPrintModal"
+                >
+                  <SvgIcon name="printer" :size="13" style="margin-right: 4px;" />
+                  打印召回处置四联单
+                </el-button>
+              </div>
+            </div>
+
+            <!-- 批次穿透汇总统计看板卡片 -->
+            <div v-if="activeBatchSummary" class="recall-summary-card glass-panel" style="margin-bottom: 14px; padding: 14px 18px; border-left: 4px solid var(--color-danger); background: var(--bg-card-glass);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <span class="status-chip chip-disabled" style="font-weight: 600; padding: 2px 8px;">召回批号: {{ activeBatchSummary.batch_no }}</span>
+                  <span style="font-size: 15px; font-weight: 600; color: var(--text-primary);">{{ activeBatchSummary.product_name }}</span>
+                  <span class="text-muted" style="font-size: 12px;">规格: {{ activeBatchSummary.spec_model }} | 编码: {{ activeBatchSummary.product_code }}</span>
+                </div>
+                <div class="text-muted" style="font-size: 12px;">
+                  失效期: <span class="font-mono">{{ activeBatchSummary.expiry_date }}</span> | 单价: <span class="font-mono text-danger">¥{{ activeBatchSummary.unit_price }}</span>
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
+                <div class="sub-kpi-block" style="background: rgba(var(--accent-primary-rgb), 0.08); padding: 8px 12px; border-radius: 6px;">
+                  <div class="text-muted" style="font-size: 12px;">全院赋码总件数</div>
+                  <div class="font-mono" style="font-size: 18px; font-weight: 700; color: var(--accent-primary);">{{ activeBatchSummary.total_items_in_batch }} <span style="font-size: 11px;">件</span></div>
+                </div>
+                <div class="sub-kpi-block" style="background: rgba(16, 185, 129, 0.08); padding: 8px 12px; border-radius: 6px;">
+                  <div class="text-muted" style="font-size: 12px;">在库/专柜拦截锁定</div>
+                  <div class="font-mono" style="font-size: 18px; font-weight: 700; color: var(--color-success);">{{ activeBatchSummary.in_stock_frozen_count }} <span style="font-size: 11px;">件 (已阻断未流入人体)</span></div>
+                </div>
+                <div class="sub-kpi-block" style="background: rgba(239, 68, 68, 0.08); padding: 8px 12px; border-radius: 6px;">
+                  <div class="text-muted" style="font-size: 12px;">已植入体内需追访患者</div>
+                  <div class="font-mono" style="font-size: 18px; font-weight: 700; color: var(--color-danger);">{{ activeBatchSummary.implanted_patients_count }} <span style="font-size: 11px;">人 (紧急随访对象)</span></div>
+                </div>
+                <div class="sub-kpi-block" style="background: rgba(245, 158, 11, 0.08); padding: 8px 12px; border-radius: 6px;">
+                  <div class="text-muted" style="font-size: 12px;">随访完成与正常率</div>
+                  <div class="font-mono" style="font-size: 18px; font-weight: 700; color: var(--color-warning);">{{ followUpRate }}% <span style="font-size: 11px;">({{ normalFollowUpCount }}/{{ activeBatchSummary.implanted_patients_count }})</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 已植入患者紧急随访跟踪清册表格 -->
+            <el-table
+              :data="paginatedRecallPatients"
+              border
+              stripe
+              class="fusion-styled-table"
+              v-loading="loadingRecall"
+              empty-text="暂无该召回批次关联的已植入患者记录，或请在上方切换召回批号"
+            >
+              <el-table-column type="index" label="序号" width="55" align="center" />
+              <el-table-column prop="udi_sn" label="单品唯一 UDI 码" width="170" class-name="font-mono tabular-nums" show-overflow-tooltip />
+              <el-table-column prop="patient_name_masked" label="患者脱敏姓名" width="110" align="center" />
+              <el-table-column prop="patient_inpatient_no" label="住院病案号" width="140" class-name="font-mono tabular-nums" />
+              <el-table-column prop="surgery_name" label="手术名称" min-width="150" show-overflow-tooltip />
+              <el-table-column prop="attending_doctor" label="主刀医生" width="95" align="center" />
+              <el-table-column prop="verify_nurse_name" label="核销护士" width="95" align="center" />
+              <el-table-column prop="verified_at" label="植入核销时间" width="150" class-name="font-mono tabular-nums" />
+              <el-table-column prop="current_dept_name" label="手术执行科室" width="110" />
+              <el-table-column label="随访状态" width="150" align="center">
+                <template #default="{ row }">
+                  <el-tag v-if="row.follow_up_status === 'CONTACTED_NORMAL'" type="success" size="small" effect="plain">已随访(体征正常)</el-tag>
+                  <el-tag v-else-if="row.follow_up_status === 'ADVERSE_OBSERVED'" type="danger" size="small" effect="dark">发现不良反应(需复查)</el-tag>
+                  <el-tag v-else-if="row.follow_up_status === 'COMPENSATED'" type="info" size="small" effect="plain">厂家理赔已闭环</el-tag>
+                  <el-tag v-else type="warning" size="small" effect="plain">待电话联系随访</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="follow_up_doctor" label="随访主治医护" width="110" align="center" />
+              <el-table-column prop="follow_up_remark" label="医学观察与处置记录" min-width="170" show-overflow-tooltip />
+              <el-table-column label="操作" width="120" align="center" fixed="right">
+                <template #default="{ row }">
+                  <el-button
+                    type="primary"
+                    link
+                    size="small"
+                    @click="openUpdateFollowUpModal(row)"
+                  >
+                    更新随访
+                  </el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+
+            <!-- 分页 -->
+            <div class="pagination-footer" style="display: flex; justify-content: flex-end; padding: 12px 0 4px;">
+              <el-pagination
+                v-model:current-page="recallPage"
+                v-model:page-size="recallPageSize"
+                :total="recallPatientList.length"
+                :page-sizes="[10, 20, 50]"
+                layout="total, sizes, prev, pager, next"
+              />
+            </div>
+          </div>
+        </el-tab-pane>
       </el-tabs>
     </div>
 
@@ -712,6 +848,156 @@
       :item-data="selectedQrItem"
       @verified="handleQrVerified"
     />
+
+    <!-- 弹窗 6: 医疗器械不良事件紧急召回处置报告（含患者清册四联单） -->
+    <el-dialog
+      v-model="recallPrintModalVisible"
+      title="医疗器械不良事件紧急召回处置报告 (国家标准四联单预览)"
+      width="960px"
+      append-to-body
+      class="fusion-dialog print-preview-dialog"
+    >
+      <div id="recall-printable-area" class="voucher-wrapper print-report-box" style="padding: 24px 32px; background: #fff; color: #111; font-family: 'SimSun', serif; border: 1px solid #ddd;">
+        <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 12px; margin-bottom: 16px;">
+          <h2 style="margin: 0; font-size: 20px; font-weight: bold; letter-spacing: 2px;">浙江省立第一医院 · 医疗器械不良事件紧急召回处置报告</h2>
+          <div style="font-size: 13px; color: #444; margin-top: 6px;">
+            <span>报告编号: <strong class="font-mono">RECALL-20261106-009</strong></span>
+            <span style="margin: 0 16px;">|</span>
+            <span>召回等级: <strong style="color: #b91c1c;">一级召回 (存在严重健康危害)</strong></span>
+            <span style="margin: 0 16px;">|</span>
+            <span>报告生成日期: <strong class="font-mono">{{ new Date().toISOString().split('T')[0] }}</strong></span>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 13px; line-height: 1.8; margin-bottom: 14px;">
+          <div>召回产品名称: <strong>{{ activeBatchSummary?.product_name }}</strong></div>
+          <div>生产批号: <strong class="font-mono">{{ activeBatchSummary?.batch_no }}</strong></div>
+          <div>规格型号: <span>{{ activeBatchSummary?.spec_model }}</span></div>
+          <div>器械编码: <span class="font-mono">{{ activeBatchSummary?.product_code }}</span></div>
+          <div>全院采购总数: <span class="font-mono">{{ activeBatchSummary?.total_items_in_batch }} 件</span></div>
+          <div>在库拦截封存: <span class="font-mono" style="color: #047857;">{{ activeBatchSummary?.in_stock_frozen_count }} 件 (已阻断未植入)</span></div>
+          <div>临床已植入体内数: <span class="font-mono" style="color: #b91c1c;">{{ activeBatchSummary?.implanted_patients_count }} 人 (重点追查随访对象)</span></div>
+          <div>随访闭环率: <span class="font-mono">{{ followUpRate }}%</span></div>
+        </div>
+
+        <div style="margin-bottom: 14px;">
+          <div style="font-weight: bold; font-size: 14px; margin-bottom: 6px;">【临床已植入患者紧急随访与健康监控清册】</div>
+          <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;" border="1">
+            <thead>
+              <tr style="background: #f3f4f6;">
+                <th style="padding: 6px;">序号</th>
+                <th style="padding: 6px;">单品 UDI 码</th>
+                <th style="padding: 6px;">住院病案号</th>
+                <th style="padding: 6px;">患者姓名</th>
+                <th style="padding: 6px;">关联手术</th>
+                <th style="padding: 6px;">主刀医生</th>
+                <th style="padding: 6px;">随访状态</th>
+                <th style="padding: 6px;">医学观察与处置记录</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(p, idx) in recallPatientList" :key="p.udi_sn">
+                <td style="padding: 6px; text-align: center;">{{ idx + 1 }}</td>
+                <td style="padding: 6px; font-family: monospace;">{{ p.udi_sn }}</td>
+                <td style="padding: 6px; font-family: monospace;">{{ p.patient_inpatient_no }}</td>
+                <td style="padding: 6px;">{{ p.patient_name_masked }}</td>
+                <td style="padding: 6px;">{{ p.surgery_name }}</td>
+                <td style="padding: 6px;">{{ p.attending_doctor }}</td>
+                <td style="padding: 6px;">{{ p.follow_up_status }}</td>
+                <td style="padding: 6px;">{{ p.follow_up_remark }}</td>
+              </tr>
+              <tr v-if="recallPatientList.length === 0">
+                <td colspan="8" style="padding: 12px; text-align: center; color: #666;">暂无已植入患者数据</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div style="margin-top: 24px; padding-top: 14px; border-top: 1px dashed #666; display: grid; grid-template-columns: repeat(4, 1fr); font-size: 12px; text-align: center;">
+          <div>
+            <div>第一联：临床科室留存</div>
+            <div style="margin-top: 28px;">科室主任签名: ________</div>
+          </div>
+          <div>
+            <div>第二联：耗材设备科质管联</div>
+            <div style="margin-top: 28px;">质管专员签名: ________</div>
+          </div>
+          <div>
+            <div>第三联：医务处院感监控联</div>
+            <div style="margin-top: 28px;">医务处核准: ________</div>
+          </div>
+          <div>
+            <div>第四联：省市药监局召回报备联</div>
+            <div style="margin-top: 28px;">机构签章: [盖章]</div>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <el-button @click="recallPrintModalVisible = false">关闭预览</el-button>
+        <el-button type="primary" @click="triggerBrowserPrint">
+          <SvgIcon name="printer" :size="13" style="margin-right: 4px;" />
+          立即打印报告
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 弹窗 7: 更新不良事件已植入患者随访状态 -->
+    <el-dialog
+      v-model="followUpDialogVisible"
+      title="更新不良事件患者医学随访与处置记录"
+      width="540px"
+      append-to-body
+      class="fusion-dialog"
+    >
+      <div v-if="currentFollowUpItem" class="follow-up-form" style="padding: 10px 16px;">
+        <div style="background: rgba(var(--accent-primary-rgb), 0.08); padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 13px;">
+          <div>患者: <strong>{{ currentFollowUpItem.patient_name_masked }}</strong> (住院号: <span class="font-mono">{{ currentFollowUpItem.patient_inpatient_no }}</span>)</div>
+          <div style="margin-top: 4px; font-size: 12px; color: var(--text-muted);">
+            单品 UDI: <span class="font-mono">{{ currentFollowUpItem.udi_sn }}</span> | 手术: {{ currentFollowUpItem.surgery_name }}
+          </div>
+        </div>
+
+        <el-form label-position="top">
+          <el-form-item label="随访流转状态">
+            <el-select v-model="followUpForm.status" style="width: 100%;">
+              <el-option label="待电话联系随访 (PENDING_CONTACT)" value="PENDING_CONTACT" />
+              <el-option label="已电话随访(体征正常) (CONTACTED_NORMAL)" value="CONTACTED_NORMAL" />
+              <el-option label="发现不良反应(需入院复查) (ADVERSE_OBSERVED)" value="ADVERSE_OBSERVED" />
+              <el-option label="厂家理赔与随访已闭环 (COMPENSATED)" value="COMPENSATED" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="随访医护/专员姓名">
+            <el-input v-model="followUpForm.doctor" placeholder="请输入随访医护姓名" />
+          </el-form-item>
+          <el-form-item label="医学观察与处置记录说明">
+            <el-input
+              v-model="followUpForm.remark"
+              type="textarea"
+              :rows="4"
+              placeholder="请输入患者主诉、伤口体征、影像复查结果或医患沟通处置记录..."
+            />
+          </el-form-item>
+        </el-form>
+      </div>
+      <template #footer>
+        <el-button @click="followUpDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitFollowUpUpdate">保存随访记录</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 智能体 4: 高值耗材一物一码全链路溯源智能体 (ReAct 思考-行动-观察循环架构) -->
+    <AgentChatWidget
+      floating
+      agent-id="udi_trace"
+      agent-title="高值耗材全链路溯源智能体"
+      architecture-tag="ReAct (Thought-Action-Observation)"
+      :preset-questions="[
+        '全链路溯源高值耗材 UDI-HV-20261104-001',
+        '查询近期异常高值耗材流转批次',
+        '排查未扫码核销的高值支架'
+      ]"
+    />
   </div>
 </template>
 
@@ -728,16 +1014,125 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { httpGet, httpPost } from '@/api/request';
 import { useUserStore } from '@/stores/userStore';
 import SvgIcon from '@/components/common/SvgIcon.vue';
+import AgentChatWidget from '@/components/AgentChatWidget.vue';
 import HighValueQrVerifyModal from '@/components/HighValueQrVerifyModal.vue';
 import SelectProductDictDialog from '@/components/SelectProductDictDialog.vue';
 import StocktakePlanWorkbench from '@/components/StocktakePlanWorkbench.vue';
 import SelectHighValueItemDialog from '@/components/SelectHighValueItemDialog.vue';
+import {
+  traceRecallPatients,
+  updateRecallFollowUp,
+  type RecallBatchSummary,
+  type RecallPatientItem
+} from '@/api/extendedSpdApi';
 
 const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
 
 const activeTab = ref('inbound');
+
+// 不良事件召回患者追溯中枢状态 (方案 A 落地)
+const selectedRecallBatch = ref<string>('B20261012');
+const recallBatchOptions = ref<any[]>([]);
+const activeBatchSummary = ref<RecallBatchSummary | null>(null);
+const recallPatientList = ref<RecallPatientItem[]>([]);
+const loadingRecall = ref<boolean>(false);
+const recallPage = ref(1);
+const recallPageSize = ref(10);
+const paginatedRecallPatients = computed(() => {
+  const start = (recallPage.value - 1) * recallPageSize.value;
+  return recallPatientList.value.slice(start, start + recallPageSize.value);
+});
+
+const normalFollowUpCount = computed(() => {
+  return recallPatientList.value.filter(
+    (p) => p.follow_up_status === 'CONTACTED_NORMAL' || p.follow_up_status === 'COMPENSATED'
+  ).length;
+});
+
+const followUpRate = computed(() => {
+  if (!activeBatchSummary.value || activeBatchSummary.value.implanted_patients_count === 0) return 100;
+  return Math.round((normalFollowUpCount.value / activeBatchSummary.value.implanted_patients_count) * 100);
+});
+
+// 随访更新对话框
+const followUpDialogVisible = ref(false);
+const currentFollowUpItem = ref<RecallPatientItem | null>(null);
+const followUpForm = ref({
+  status: 'CONTACTED_NORMAL',
+  doctor: '',
+  remark: ''
+});
+
+// 打印报告对话框
+const recallPrintModalVisible = ref(false);
+
+const handleFetchRecallTrace = async (batchNo?: string) => {
+  loadingRecall.value = true;
+  try {
+    const res = await traceRecallPatients(batchNo || undefined);
+    if (res.batch_list && res.batch_list.length > 0) {
+      recallBatchOptions.value = res.batch_list;
+      if (!batchNo && res.batch_list.length > 0) {
+        selectedRecallBatch.value = res.batch_list[0].batch_no;
+        const detailRes = await traceRecallPatients(selectedRecallBatch.value);
+        activeBatchSummary.value = detailRes.batch_summary;
+        recallPatientList.value = detailRes.patient_list || [];
+        return;
+      }
+    }
+    if (res.batch_summary) {
+      activeBatchSummary.value = res.batch_summary;
+      recallPatientList.value = res.patient_list || [];
+    }
+  } catch (err: any) {
+    ElMessage.error(err.message || '获取召回批次追查清册失败');
+  } finally {
+    loadingRecall.value = false;
+  }
+};
+
+const openUpdateFollowUpModal = (item: RecallPatientItem) => {
+  currentFollowUpItem.value = item;
+  followUpForm.value = {
+    status: item.follow_up_status || 'CONTACTED_NORMAL',
+    doctor: item.follow_up_doctor || userStore.currentUser?.realName || '质管追访专员',
+    remark:
+      item.follow_up_remark && item.follow_up_remark !== '暂无随访记录'
+        ? item.follow_up_remark
+        : '已电话联系患者本人，自述伤口体征平稳，未见明显心悸、胸痛或植入处红肿等不良事件反应。'
+  };
+  followUpDialogVisible.value = true;
+};
+
+const submitFollowUpUpdate = async () => {
+  if (!currentFollowUpItem.value) return;
+  try {
+    await updateRecallFollowUp({
+      udi_sn: currentFollowUpItem.value.udi_sn,
+      batch_no: currentFollowUpItem.value.batch_no,
+      follow_up_status: followUpForm.value.status,
+      follow_up_doctor: followUpForm.value.doctor,
+      follow_up_remark: followUpForm.value.remark,
+      operator_name: userStore.currentUser?.realName || '质管追访专员'
+    });
+    ElMessage.success('已成功更新患者随访状态并沉淀 6W 审计日志');
+    followUpDialogVisible.value = false;
+    await handleFetchRecallTrace(selectedRecallBatch.value);
+  } catch (err: any) {
+    ElMessage.error(err.message || '更新随访状态失败');
+  }
+};
+
+const openRecallPrintModal = () => {
+  recallPrintModalVisible.value = true;
+};
+
+const triggerBrowserPrint = () => {
+  window.print();
+};
+
 
 // 数据源
 const prepOrders = ref<any[]>([]);
@@ -875,6 +1270,7 @@ function handleTabChange(tabName: any) {
   else if (tabName === 'stocktake') loadStocktakeBase();
   else if (tabName === 'realtime') fetchRealtimeHvStock();
   else if (tabName === 'init-stock') fetchInitialHvStock();
+  else if (tabName === 'recall-trace') handleFetchRecallTrace(selectedRecallBatch.value);
 }
 
 /**
@@ -883,10 +1279,11 @@ function handleTabChange(tabName: any) {
 watch(
   () => route.query.tab,
   (newTab) => {
-    if (newTab && ['inbound', 'stock', 'coding', 'return', 'stocktake', 'realtime', 'init-stock'].includes(newTab as string)) {
+    if (newTab && ['inbound', 'stock', 'coding', 'return', 'stocktake', 'realtime', 'init-stock', 'recall-trace'].includes(newTab as string)) {
       activeTab.value = newTab as string;
       if (newTab === 'realtime') fetchRealtimeHvStock();
       else if (newTab === 'init-stock') fetchInitialHvStock();
+      else if (newTab === 'recall-trace') handleFetchRecallTrace(selectedRecallBatch.value);
     }
   }
 );
@@ -1231,7 +1628,7 @@ async function handleSubmitStocktake() {
 
 onMounted(() => {
   const currentTab = (route.query.tab as string) || 'inbound';
-  if (['inbound', 'stock', 'coding', 'return', 'stocktake', 'realtime', 'init-stock'].includes(currentTab)) {
+  if (['inbound', 'stock', 'coding', 'return', 'stocktake', 'realtime', 'init-stock', 'recall-trace'].includes(currentTab)) {
     activeTab.value = currentTab;
   }
   fetchPrepData();
@@ -1240,6 +1637,7 @@ onMounted(() => {
   fetchReturnData();
   fetchRealtimeHvStock();
   fetchInitialHvStock();
+  handleFetchRecallTrace('B20261012');
 });
 </script>
 

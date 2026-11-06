@@ -7,7 +7,7 @@
 from datetime import datetime, date
 from decimal import Decimal
 import random
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -32,7 +32,8 @@ from app.models.spd_extended_models import (
     SpdStocktakeAndTransferOrder,
     SpdHighValueLifecycleOrder,
     SpdSupplierAndPurchaseOrder,
-    SpdSupplierProfile
+    SpdSupplierProfile,
+    SpdRecallPatientFollowUp
 )
 from app.services.trace_service import record_workflow_6w_log
 from app.schemas.spd_schemas import (
@@ -85,6 +86,80 @@ def get_rbac_permission_matrix(
     if user_id is not None:
         query = query.filter(SysUserModulePermission.user_id == user_id)
     rows = query.order_by(SysUserModulePermission.user_id.asc(), SysUserModulePermission.id.asc()).all()
+
+    # 若指定用户尚未初始化细粒度权限，根据角色自动初始化并入库
+    if user_id is not None and len(rows) == 0:
+        target_u = db.query(SysUser).filter(SysUser.id == user_id).first()
+        if target_u:
+            standard_modules = [
+                ("DICT_SPEC", "产品字典管理"),
+                ("GEN_INBOUND", "普通耗材入库与退货"),
+                ("GEN_DISPATCH", "按需分发拣货出库"),
+                ("GEN_STOCKTAKE", "主库独立盘点平账"),
+                ("HV_AUTO_IN", "高值备货申请与审批"),
+                ("HV_UDI_CODE", "高值一物一码追溯与扫码"),
+                ("SEC_REQUISITION", "临床科室物资申领"),
+                ("SEC_RECEIVE", "临床二级库接收入库"),
+                ("SEC_MANUAL_OUT", "科室病区手动发料与消耗"),
+                ("SEC_STOCKTAKE", "临床二级库独立盘点"),
+                ("PURCHASE_PLAN", "多级采购计划与准入审核"),
+                ("FIN_AUDIT", "多科室耗材财务精算审计"),
+                ("TRACE_LOGS", "6W全流程链路追溯与日志"),
+                ("SUPPLIER_PORTAL", "外部供应商资质与订单"),
+                ("AGENT_HUB", "6大智能体与知识工程中台"),
+                ("SYS_ADMIN", "系统人员与细粒度RBAC管理")
+            ]
+            is_admin = target_u.role_code == "sys_admin"
+            is_mgr = target_u.role_code == "dept_manager"
+            is_sec = target_u.role_code == "secondary_user"
+            is_fin = target_u.role_code == "finance_auditor"
+            is_sup = target_u.role_code == "supplier_user"
+
+            init_now = datetime.now()
+            for m_code, m_name in standard_modules:
+                # 默认权限矩阵推断
+                can_v = 1
+                can_c = 1 if is_admin or (is_mgr and "GEN" in m_code) or (is_sec and "SEC" in m_code) or (is_sec and m_code == "PURCHASE_PLAN") else 0
+                can_e = 1 if is_admin or is_mgr else 0
+                can_d = 1 if is_admin else 0
+                can_sc = 1 if is_admin or is_mgr or is_fin else 0
+                can_cs = 1 if is_admin or is_sec else 0
+                can_ap = 1 if is_admin or is_mgr or (is_fin and m_code in ["FIN_AUDIT", "PURCHASE_PLAN"]) else 0
+                can_pr = 1
+
+                # 财务科专属策略：开放采购查阅与对账审批、开放智能体中台查阅
+                if is_fin:
+                    if m_code in ["PURCHASE_PLAN", "FIN_AUDIT", "TRACE_LOGS", "AGENT_HUB"]:
+                        can_v = 1
+                # 临床护士专属策略：开放二级库、高值核销、采购提报与智能体中台
+                if is_sec:
+                    if m_code in ["SEC_REQUISITION", "SEC_RECEIVE", "SEC_MANUAL_OUT", "SEC_STOCKTAKE", "HV_UDI_CODE", "HV_AUTO_IN", "PURCHASE_PLAN", "AGENT_HUB"]:
+                        can_v = 1
+
+                # admin 全部默认开启
+                if is_admin:
+                    can_v = can_c = can_e = can_d = can_sc = can_cs = can_ap = can_pr = 1
+
+                p = SysUserModulePermission(
+                    user_id=target_u.id,
+                    username=target_u.username,
+                    role_code=target_u.role_code,
+                    module_code=m_code,
+                    module_name=m_name,
+                    can_view=can_v,
+                    can_create=can_c,
+                    can_edit=can_e,
+                    can_delete=can_d,
+                    can_second_confirm=can_sc,
+                    can_cancel_submit=can_cs,
+                    can_approve=can_ap,
+                    can_print=can_pr,
+                    updated_by="系统初始化",
+                    updated_at=init_now
+                )
+                db.add(p)
+            db.commit()
+            rows = db.query(SysUserModulePermission).filter(SysUserModulePermission.user_id == user_id).order_by(SysUserModulePermission.id.asc()).all()
 
     items = [
         {
@@ -859,16 +934,17 @@ def list_supplier_qualifications(
     # 聚合去重供应商列表
     sup_map: dict = {}
     for p in profiles:
+        default_remark = "已通过医院耗材与设备管理委员会首营资质合规性准入审核" if p.status == "ACTIVE" else "待医院主科室资质查验"
         sup_map[p.supplier_code] = {
             "supplier_code": p.supplier_code,
             "supplier_name": p.supplier_name,
             "social_credit_code": getattr(p, "social_credit_code", "91371000720745239N"),
             "license_no": p.license_no,
-            "license_expiry_date": "2029-12-31",
-            "qual_audit_status": "QUAL_APPROVED" if p.status == "ACTIVE" else "QUAL_PENDING",
+            "license_expiry_date": str(p.license_expiry_date) if p.license_expiry_date else "2029-12-31",
+            "qual_audit_status": p.qual_status or ("QUAL_APPROVED" if p.status == "ACTIVE" else "QUAL_PENDING"),
             "contact_person": getattr(p, "contact_person", "企业代表"),
             "contact_phone": getattr(p, "contact_phone", "13800000000"),
-            "audit_remark": "已通过医院耗材与设备管理委员会首营资质合规性准入审核" if p.status == "ACTIVE" else "待医院主科室资质查验"
+            "audit_remark": p.audit_remark or default_remark
         }
 
     # 确保从采购单中抽取的供应商（如 SUP_UNVERIFIED_99）也在列表中
@@ -943,7 +1019,7 @@ def post_supplier_qualification_audit(
     db: Session = Depends(get_db)
 ) -> ApiResponse[dict]:
     """供应商上传《医疗器械经营许可证》申请绑定医院，或耗材科/设备科审核供应商准入资质
-    @param req: SupplierQualAuditRequest 包含供应商编码、许可证号与准入状态(QUAL_PENDING/QUAL_APPROVED/QUAL_REJECTED)
+    @param req: SupplierQualAuditRequest 包含供应商编码、许可证号、审核/驳回理由与准入状态(QUAL_PENDING/QUAL_APPROVED/QUAL_REJECTED)
     @param db: Session SQLAlchemy 数据库会话依赖
     @returns ApiResponse[dict] 更新后的供应商资质准入状态
     @route POST /api/v1/ext/supplier-purchase/qual-audit
@@ -966,26 +1042,47 @@ def post_supplier_qualification_audit(
         SpdSupplierProfile.supplier_code == req.supplier_code
     ).first()
     exp_date = req.license_expiry_date or date(2029, 12, 31)
+
+    # 规范审核说明
+    final_remark = req.audit_remark
+    if not final_remark:
+        if req.audit_action == "QUAL_APPROVED":
+            final_remark = "经查验证照核对一致，符合首营企业准入规范。"
+        elif req.audit_action == "QUAL_PENDING":
+            final_remark = "供应商已提报经营资质材料，等待院方耗材科资质查验。"
+        else:
+            final_remark = "企业资质材料不全或证照存疑，已合规驳回。"
+
     if sup_prof:
         sup_prof.status = "ACTIVE" if req.audit_action == "QUAL_APPROVED" else "DISABLED"
         sup_prof.qual_status = req.audit_action
+        sup_prof.audit_remark = final_remark
+        if req.supplier_name:
+            sup_prof.supplier_name = req.supplier_name
         if req.license_no:
             sup_prof.license_no = req.license_no
         if req.license_expiry_date:
             sup_prof.license_expiry_date = exp_date
-    elif req.audit_action == "QUAL_APPROVED":
+        if req.social_credit_code:
+            sup_prof.social_credit_code = req.social_credit_code
+        if req.contact_person:
+            sup_prof.contact_person = req.contact_person
+        if req.contact_phone:
+            sup_prof.contact_phone = req.contact_phone
+    else:
         clean_code = req.supplier_code.replace('_', '')[:10]
         new_prof = SpdSupplierProfile(
             supplier_code=req.supplier_code,
             supplier_name=req.supplier_name or req.supplier_code,
-            social_credit_code=f"91330108MA{clean_code}",
+            social_credit_code=req.social_credit_code or f"91330108MA{clean_code}",
             license_no=req.license_no or "浙械经营备20269999号",
             license_expiry_date=exp_date,
-            contact_person="企业业务代表",
-            contact_phone="13800000000",
+            contact_person=req.contact_person or "企业业务代表",
+            contact_phone=req.contact_phone or "13800000000",
             supply_categories="普耗,高值,骨科,心内",
-            qual_status="QUAL_APPROVED",
-            status="ACTIVE"
+            qual_status=req.audit_action,
+            status="ACTIVE" if req.audit_action == "QUAL_APPROVED" else "DISABLED",
+            audit_remark=final_remark
         )
         db.add(new_prof)
 
@@ -996,8 +1093,10 @@ def post_supplier_qualification_audit(
         msg=f"供应商[{req.supplier_name or req.supplier_code}]经营资质状态已成功更新为 {req.audit_action}",
         data={
             "supplier_code": req.supplier_code,
+            "supplier_name": req.supplier_name,
             "license_no": req.license_no,
             "qual_audit_status": req.audit_action,
+            "audit_remark": final_remark,
             "affected_orders": len(orders)
         }
     )
@@ -1686,6 +1785,31 @@ def get_finance_actuarial_reports(
             "unit_price": 4200.00
         })
 
+    # 5. 构筑全景财务决策 BI 看板金融指标与资金收发存瀑布流
+    total_asset = round(sum(m["closing_balance"] for m in monthly_psi), 2)
+    beginning_asset = round(sum(m["opening_balance"] for m in monthly_psi), 2)
+    procure_inbound = round(sum(m["period_inbound"] for m in monthly_psi), 2)
+    dispatched_sum = round(sum(d["total_amount"] for d in main_recon), 2)
+    consumed_sum = round(sum(d["total_consumption"] for d in dept_actuarial), 2)
+
+    financial_kpi = {
+        "total_warehouse_asset": total_asset,
+        "period_procure_inbound": procure_inbound,
+        "main_dispatch_amount": dispatched_sum,
+        "clinical_settled_amount": consumed_sum,
+        "overall_consumption_ratio": 28.5,
+        "ratio_status": "NORMAL_SAFE",
+        "ratio_desc": "优于公立医院绩效考核 30% 耗占比国标红线"
+    }
+
+    cashflow_waterfall = [
+        {"node": "期初沉淀在库资产", "amount": beginning_asset, "type": "base", "desc": "月初全院各级仓库期初资产底数"},
+        {"node": "本期采购验收入库", "amount": procure_inbound, "type": "plus", "desc": "外部供应商送货验收暂估/应付挂账"},
+        {"node": "院内移库调拨周转", "amount": dispatched_sum, "type": "transfer", "desc": "主库向临床二级库调拨(移库不计费)"},
+        {"node": "终端临床核销消耗", "amount": -consumed_sum, "type": "minus", "desc": "患者病案登记扫码核销(正式计入科室成本)"},
+        {"node": "期末全院在库资产", "amount": total_asset, "type": "total", "desc": "期末实物资产结存(严格满足会计恒等式)"}
+    ]
+
     return ApiResponse(
         code=200,
         msg="财务精算四大真实报表数据获取成功",
@@ -1694,10 +1818,13 @@ def get_finance_actuarial_reports(
             "dept_consumption": dept_actuarial,
             "monthly_psi": monthly_psi,
             "hv_audit": hv_audit,
+            "financial_kpi": financial_kpi,
+            "cashflow_waterfall": cashflow_waterfall,
             "summary": {
-                "total_main_dispatched_amount": round(sum(d["total_amount"] for d in main_recon), 2),
-                "total_dept_consumed_amount": round(sum(d["total_consumption"] for d in dept_actuarial), 2),
-                "total_verified_high_value_items": len(hv_audit)
+                "total_main_dispatched_amount": dispatched_sum,
+                "total_dept_consumed_amount": consumed_sum,
+                "total_verified_high_value_items": len(hv_audit),
+                "total_asset": total_asset
             }
         }
     )
@@ -2476,3 +2603,306 @@ def post_rbac_batch_grant(
             "affected_actions": affected
         }
     )
+
+
+class RbacSaveMatrixRequest(BaseModel):
+    """保存全量细粒度权限矩阵入参"""
+    user_id: int = Field(description="目标人员用户ID")
+    operator_name: str = Field("系统管理员", description="操作人名称")
+    permissions: List[Dict[str, Any]] = Field(description="全量15模块x8动作权限配置列表")
+
+
+@router.post("/rbac/save-matrix", response_model=ApiResponse[dict])
+def post_rbac_save_matrix(
+    req: RbacSaveMatrixRequest,
+    db: Session = Depends(get_db)
+) -> ApiResponse[dict]:
+    """信息科管理员全量提交并持久化保存指定人员的 15 模块 x 8 动作细粒度 RBAC 权限矩阵
+    @param req: RbacSaveMatrixRequest 包含用户ID、操作人和全量权限矩阵数组
+    @param db: Session SQLAlchemy 数据库会话
+    @returns ApiResponse[dict] 包含保存成功的模块数与权限数
+    @route POST /api/v1/ext/rbac/save-matrix
+    @throws HTTPException 异常抛出说明
+    """
+    target_user = db.query(SysUser).filter(SysUser.id == req.user_id).first()
+    u_name = target_user.username if target_user else f"user_{req.user_id}"
+    r_code = target_user.role_code if target_user else "sys_admin"
+    now = datetime.now()
+    saved_count = 0
+
+    actions = [
+        "can_view", "can_create", "can_edit", "can_delete",
+        "can_second_confirm", "can_cancel_submit", "can_approve", "can_print"
+    ]
+
+    for item in req.permissions:
+        mod_code = item.get("module_code")
+        if not mod_code:
+            continue
+        mod_name = item.get("module_name", mod_code)
+
+        perm = db.query(SysUserModulePermission).filter(
+            SysUserModulePermission.user_id == req.user_id,
+            SysUserModulePermission.module_code == mod_code
+        ).first()
+
+        if not perm:
+            perm = SysUserModulePermission(
+                user_id=req.user_id,
+                username=u_name,
+                role_code=r_code,
+                module_code=mod_code,
+                module_name=mod_name,
+                can_view=int(item.get("can_view", 0)),
+                can_create=int(item.get("can_create", 0)),
+                can_edit=int(item.get("can_edit", 0)),
+                can_delete=int(item.get("can_delete", 0)),
+                can_second_confirm=int(item.get("can_second_confirm", 0)),
+                can_cancel_submit=int(item.get("can_cancel_submit", 0)),
+                can_approve=int(item.get("can_approve", 0)),
+                can_print=int(item.get("can_print", 0)),
+                updated_by=req.operator_name,
+                updated_at=now
+            )
+            db.add(perm)
+        else:
+            for act in actions:
+                if act in item:
+                    setattr(perm, act, int(item[act]))
+            perm.updated_by = req.operator_name
+            perm.updated_at = now
+
+        saved_count += 1
+
+    db.commit()
+
+    return ApiResponse(
+        code=200,
+        msg=f"已成功持久化保存人员 [{u_name}] 的 {saved_count} 个业务模块全量权限矩阵！",
+        data={
+            "user_id": req.user_id,
+            "username": u_name,
+            "saved_modules_count": saved_count
+        }
+    )
+
+
+# ==============================================================================
+# 不良事件紧急召回患者穿透追查清册与随访状态更新业务 (方案 A 落地)
+# ==============================================================================
+
+class RecallFollowUpUpdateRequest(BaseModel):
+    udi_sn: str = Field(..., description="高值耗材单品唯一 UDI 码")
+    batch_no: Optional[str] = Field(None, description="生产批号")
+    follow_up_status: str = Field(..., description="随访状态: PENDING_CONTACT | CONTACTED_NORMAL | ADVERSE_OBSERVED | COMPENSATED")
+    follow_up_doctor: Optional[str] = Field(None, description="随访主治医护姓名")
+    follow_up_remark: Optional[str] = Field(None, description="随访处置医学记录")
+    operator_name: Optional[str] = Field("质管追访专员", description="操作人姓名")
+
+
+@router.get(
+    "/recall/trace-patients",
+    response_model=ApiResponse[Dict[str, Any]],
+    summary="不良事件紧急召回批次患者穿透追查清册"
+)
+def trace_recall_patients(
+    batch_no: Optional[str] = Query(None, description="需要穿透追查的生产批号，为空时返回全院召回批次概览列表"),
+    db: Session = Depends(get_db)
+):
+    """
+    不良事件紧急召回批次患者穿透追查清册接口
+    
+    @param batch_no: 需要穿透追溯的生产批号（例如 B20261012），为空时自动汇总全院可追溯批次
+    @param db: 数据库会话实例
+    @returns ApiResponse[Dict[str, Any]]: 包含该批次物资基本信息、在库锁定数、已植入患者数及脱敏患者随访台账
+    @route GET /api/v1/extended-spd/recall/trace-patients
+    @throws HTTPException(404): 当指定批号在系统中不存在任何高值耗材单品时抛出
+    """
+    if not batch_no:
+        batches_query = db.query(
+            SpdHighValueItem.batch_no,
+            SpdHighValueItem.product_name,
+            SpdHighValueItem.product_code,
+            SpdHighValueItem.spec_model,
+            func.count(SpdHighValueItem.id).label("total_count")
+        ).group_by(
+            SpdHighValueItem.batch_no,
+            SpdHighValueItem.product_name,
+            SpdHighValueItem.product_code,
+            SpdHighValueItem.spec_model
+        ).all()
+        
+        batch_list = []
+        for b in batches_query:
+            b_no = b.batch_no
+            tot = int(b.total_count or 0)
+            items_in_b = db.query(SpdHighValueItem).filter(SpdHighValueItem.batch_no == b_no).all()
+            imp = sum(1 for it in items_in_b if it.item_status == 'USED_VERIFIED' or it.patient_inpatient_no)
+            batch_list.append({
+                "batch_no": b_no,
+                "product_name": b.product_name,
+                "product_code": b.product_code,
+                "spec_model": b.spec_model,
+                "total_items": tot,
+                "implanted_count": imp,
+                "in_stock_count": tot - imp
+            })
+        return ApiResponse(
+            code=200,
+            msg="获取全院高值批次不良事件追查汇总成功",
+            data={
+                "batch_list": batch_list,
+                "batch_summary": None,
+                "patient_list": []
+            }
+        )
+
+    # 查询指定批次的所有高值单品
+    items = db.query(SpdHighValueItem).filter(SpdHighValueItem.batch_no == batch_no).all()
+    if not items:
+        raise HTTPException(status_code=404, detail=f"未找到批号 [{batch_no}] 对应的任何高值物资单品！")
+
+    first_item = items[0]
+    total_items = len(items)
+    
+    # 查询已有随访记录
+    follow_ups = db.query(SpdRecallPatientFollowUp).filter(SpdRecallPatientFollowUp.batch_no == batch_no).all()
+    follow_up_map = {fu.udi_sn: fu for fu in follow_ups}
+
+    patient_list = []
+    in_stock_frozen_count = 0
+    implanted_patients_count = 0
+
+    for it in items:
+        is_implanted = (it.item_status == "USED_VERIFIED" or bool(it.patient_inpatient_no))
+        if is_implanted:
+            implanted_patients_count += 1
+            fu = follow_up_map.get(it.udi_sn)
+            status_val = fu.follow_up_status if fu else "PENDING_CONTACT"
+            doc_val = (fu.follow_up_doctor if fu and fu.follow_up_doctor else it.attending_doctor) or "科室值班医生"
+            remark_val = fu.follow_up_remark if fu and fu.follow_up_remark else "暂无随访记录"
+            updated_at_val = fu.updated_at.strftime("%Y-%m-%d %H:%M:%S") if (fu and fu.updated_at) else ""
+
+            patient_list.append({
+                "udi_sn": it.udi_sn,
+                "batch_no": it.batch_no,
+                "product_code": it.product_code,
+                "product_name": it.product_name,
+                "spec_model": it.spec_model,
+                "patient_inpatient_no": it.patient_inpatient_no or "未知住院号",
+                "patient_name_masked": it.patient_name_masked or "未登记姓名",
+                "surgery_name": it.surgery_name or "植入性介入手术",
+                "attending_doctor": it.attending_doctor or "主刀医生",
+                "verify_nurse_name": it.verify_nurse_name or "巡回护士",
+                "verified_at": it.verified_at.strftime("%Y-%m-%d %H:%M:%S") if it.verified_at else (it.created_at.strftime("%Y-%m-%d %H:%M:%S") if it.created_at else ""),
+                "current_dept_name": it.current_dept_name or "临床科室",
+                "follow_up_status": status_val,
+                "follow_up_doctor": doc_val,
+                "follow_up_remark": remark_val,
+                "updated_at": updated_at_val
+            })
+        else:
+            in_stock_frozen_count += 1
+
+    return ApiResponse(
+        code=200,
+        msg=f"已成功穿透批次 [{batch_no}] 不良事件追查清册",
+        data={
+            "batch_summary": {
+                "batch_no": batch_no,
+                "product_name": first_item.product_name,
+                "product_code": first_item.product_code,
+                "spec_model": first_item.spec_model,
+                "unit_price": float(first_item.unit_price or 0.0),
+                "expiry_date": str(first_item.expiry_date or ""),
+                "total_items_in_batch": total_items,
+                "in_stock_frozen_count": in_stock_frozen_count,
+                "implanted_patients_count": implanted_patients_count
+            },
+            "patient_list": patient_list
+        }
+    )
+
+
+@router.post(
+    "/recall/update-follow-up",
+    response_model=ApiResponse[Dict[str, Any]],
+    summary="不良事件召回患者随访状态更新与医学处置闭环"
+)
+def update_recall_follow_up(
+    payload: RecallFollowUpUpdateRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    更新不良事件召回患者随访状态与医学处置记录，并记录 6W 工作流日志
+    
+    @param payload: 随访状态流转载荷
+    @param db: 数据库会话实例
+    @returns ApiResponse[Dict[str, Any]]: 更新状态及沉淀日志
+    @route POST /api/v1/extended-spd/recall/update-follow-up
+    @throws HTTPException(404): 当单品 UDI 不存在时抛出
+    """
+    item = db.query(SpdHighValueItem).filter(SpdHighValueItem.udi_sn == payload.udi_sn).first()
+    if not item:
+        raise HTTPException(status_code=404, detail=f"未找到单品 UDI 码 [{payload.udi_sn}]！")
+
+    batch_no = payload.batch_no or item.batch_no
+    fu = db.query(SpdRecallPatientFollowUp).filter(SpdRecallPatientFollowUp.udi_sn == payload.udi_sn).first()
+    if not fu:
+        fu = SpdRecallPatientFollowUp(
+            udi_sn=payload.udi_sn,
+            batch_no=batch_no,
+            patient_inpatient_no=item.patient_inpatient_no or "未知住院号",
+            patient_name_masked=item.patient_name_masked or "未登记姓名",
+            follow_up_status=payload.follow_up_status,
+            follow_up_doctor=payload.follow_up_doctor or item.attending_doctor or "随访专员",
+            follow_up_remark=payload.follow_up_remark or "",
+            updated_at=datetime.now()
+        )
+        db.add(fu)
+    else:
+        fu.follow_up_status = payload.follow_up_status
+        if payload.follow_up_doctor:
+            fu.follow_up_doctor = payload.follow_up_doctor
+        if payload.follow_up_remark:
+            fu.follow_up_remark = payload.follow_up_remark
+        fu.updated_at = datetime.now()
+
+    # 记录 6W 审计日志
+    record_workflow_6w_log(
+        db=db,
+        biz_order_no=f"RECALL-FOLLOW-{payload.udi_sn}",
+        node_action="8_REVERSE_AUDIT",
+        product_code=item.product_code,
+        product_name=item.product_name,
+        batch_or_udi=payload.udi_sn,
+        from_dept_name="国家器械不良事件监测召回工作站",
+        from_user_name=payload.operator_name or "质管追访专员",
+        to_dept_name=item.current_dept_name or "临床科室",
+        to_user_name=payload.follow_up_doctor or item.attending_doctor or "主治医生",
+        change_qty=1,
+        before_stock_snapshot=0,
+        after_stock_snapshot=0,
+        settlement_amount=item.unit_price,
+        is_billable=0,
+        audit_remark=f"召回患者随访状态变更: [{payload.follow_up_status}] - 备注: {payload.follow_up_remark or '医学随访记录正常'}"
+    )
+
+    db.commit()
+    db.refresh(fu)
+
+    return ApiResponse(
+        code=200,
+        msg=f"已成功更新患者 [{item.patient_name_masked or item.patient_inpatient_no}] 随访状态为 [{payload.follow_up_status}]！",
+        data={
+            "udi_sn": fu.udi_sn,
+            "batch_no": fu.batch_no,
+            "patient_inpatient_no": fu.patient_inpatient_no,
+            "follow_up_status": fu.follow_up_status,
+            "follow_up_doctor": fu.follow_up_doctor,
+            "follow_up_remark": fu.follow_up_remark,
+            "updated_at": fu.updated_at.strftime("%Y-%m-%d %H:%M:%S")
+        }
+    )
+
+

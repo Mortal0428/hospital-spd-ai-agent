@@ -237,11 +237,19 @@
             </div>
             <div
               class="sub-nav-item"
-              :class="{ active: currentPath === '/general' && (currentTab === 'stock' || currentTab === 'init-stock') }"
-              @click="navigateMenu('/general', 'init-stock')"
+              :class="{ active: currentPath === '/general' && (currentTab === 'stock' || currentTab === 'inventory') }"
+              @click="navigateMenu('/general', 'inventory')"
             >
               <span class="sub-dot" />
               <span>主库实时台账</span>
+            </div>
+            <div
+              class="sub-nav-item"
+              :class="{ active: currentPath === '/general' && currentTab === 'init-stock' }"
+              @click="navigateMenu('/general', 'init-stock')"
+            >
+              <span class="sub-dot" />
+              <span>主库期初数据建账</span>
             </div>
             <div
               class="sub-nav-item"
@@ -298,6 +306,22 @@
             >
               <span class="sub-dot" />
               <span>退货出库锁定</span>
+            </div>
+            <div
+              class="sub-nav-item"
+              :class="{ active: currentPath === '/high-value' && currentTab === 'realtime' }"
+              @click="navigateMenu('/high-value', 'realtime')"
+            >
+              <span class="sub-dot" />
+              <span>高值分仓实时台账</span>
+            </div>
+            <div
+              class="sub-nav-item"
+              :class="{ active: currentPath === '/high-value' && currentTab === 'init-stock' }"
+              @click="navigateMenu('/high-value', 'init-stock')"
+            >
+              <span class="sub-dot" />
+              <span>高值专仓期初建账</span>
             </div>
             <div
               class="sub-nav-item"
@@ -389,7 +413,15 @@
           <div v-show="isExpanded && expandedGroups.finance" class="sub-nav-list">
             <div
               class="sub-nav-item"
-              :class="{ active: currentPath === '/finance' && (currentTab === 'main-reconciliation' || !currentTab) }"
+              :class="{ active: currentPath === '/finance' && (currentTab === 'bi-dashboard' || currentTab === 'bi' || !currentTab) }"
+              @click="navigateMenu('/finance', 'bi-dashboard')"
+            >
+              <span class="sub-dot" />
+              <span>全景财务决策 BI 看板</span>
+            </div>
+            <div
+              class="sub-nav-item"
+              :class="{ active: currentPath === '/finance' && (currentTab === 'main-reconciliation' || currentTab === 'main-dispatch') }"
               @click="navigateMenu('/finance', 'main-reconciliation')"
             >
               <span class="sub-dot" />
@@ -397,7 +429,7 @@
             </div>
             <div
               class="sub-nav-item"
-              :class="{ active: currentPath === '/finance' && currentTab === 'dept-reconciliation' }"
+              :class="{ active: currentPath === '/finance' && (currentTab === 'dept-reconciliation' || currentTab === 'dept-cost') }"
               @click="navigateMenu('/finance', 'dept-reconciliation')"
             >
               <span class="sub-dot" />
@@ -405,11 +437,19 @@
             </div>
             <div
               class="sub-nav-item"
-              :class="{ active: currentPath === '/finance' && currentTab === 'monthly-balance' }"
+              :class="{ active: currentPath === '/finance' && (currentTab === 'monthly-balance' || currentTab === 'balance') }"
               @click="navigateMenu('/finance', 'monthly-balance')"
             >
               <span class="sub-dot" />
               <span>进销存月度收发存</span>
+            </div>
+            <div
+              class="sub-nav-item"
+              :class="{ active: currentPath === '/finance' && currentTab === 'sub-flows' }"
+              @click="navigateMenu('/finance', 'sub-flows')"
+            >
+              <span class="sub-dot" />
+              <span>多级小仓资金运转流水</span>
             </div>
             <div
               class="sub-nav-item"
@@ -458,6 +498,14 @@
             >
               <span class="sub-dot" />
               <span>异常审计预警</span>
+            </div>
+            <div
+              class="sub-nav-item"
+              :class="{ active: currentPath === '/logs' && currentTab === 'recall' }"
+              @click="navigateMenu('/logs', 'recall')"
+            >
+              <span class="sub-dot" />
+              <span>不良事件全院召回中枢</span>
             </div>
           </div>
         </div>
@@ -534,7 +582,55 @@
           </div>
         </div>
 
-        <!-- 9. 系统与人员管理 (sys_admin 专享 RBAC 一体化) -->
+        <!-- 9. Agentic RAG 知识工程与智能体中台 (六大异构智能体编排与知识库热插拔中台) -->
+        <div v-if="canViewRagHub" class="nav-tree-group">
+          <div
+            class="side-nav-item parent-item"
+            :class="{ active: currentPath === '/rag-hub' && !currentTab }"
+            @click="toggleGroup('ragHub', '/rag-hub')"
+          >
+            <SvgIcon name="shield" :size="16" />
+            <span v-show="isExpanded" class="item-title">智能体与知识工程</span>
+            <span v-show="isExpanded" class="side-badge">Agentic</span>
+            <span v-show="isExpanded" class="chevron-arrow" :class="{ 'is-open': expandedGroups.ragHub }">▾</span>
+          </div>
+          <div v-show="isExpanded && expandedGroups.ragHub" class="sub-nav-list">
+            <div
+              class="sub-nav-item"
+              :class="{ active: currentPath === '/rag-hub' && (!currentTab || currentTab === 'tree') }"
+              @click="navigateMenu('/rag-hub', 'tree')"
+            >
+              <span class="sub-dot" />
+              <span>知识库目录与文档</span>
+            </div>
+            <div
+              class="sub-nav-item"
+              :class="{ active: currentPath === '/rag-hub' && currentTab === 'modular' }"
+              @click="navigateMenu('/rag-hub', 'modular')"
+            >
+              <span class="sub-dot" />
+              <span>Modular RAG热插拔</span>
+            </div>
+            <div
+              class="sub-nav-item"
+              :class="{ active: currentPath === '/rag-hub' && currentTab === 'agents' }"
+              @click="navigateMenu('/rag-hub', 'agents')"
+            >
+              <span class="sub-dot" />
+              <span>六大智能体调度沙箱</span>
+            </div>
+            <div
+              class="sub-nav-item"
+              :class="{ active: currentPath === '/rag-hub' && currentTab === 'health' }"
+              @click="navigateMenu('/rag-hub', 'health')"
+            >
+              <span class="sub-dot" />
+              <span>多模型与连通性监控</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 10. 系统与人员管理 (sys_admin 专享 RBAC 一体化) -->
         <div v-if="canViewUsers" class="nav-tree-group">
           <div
             class="side-nav-item parent-item"
@@ -549,7 +645,7 @@
           <div v-show="isExpanded && expandedGroups.users" class="sub-nav-list">
             <div
               class="sub-nav-item"
-              :class="{ active: currentPath === '/users' && (!currentTab || currentTab === 'list') }"
+              :class="{ active: currentPath === '/users' && (!currentTab || currentTab === 'users' || currentTab === 'list') }"
               @click="navigateMenu('/users', 'users')"
             >
               <span class="sub-dot" />
@@ -562,6 +658,14 @@
             >
               <span class="sub-dot" />
               <span>RBAC权限矩阵</span>
+            </div>
+            <div
+              class="sub-nav-item"
+              :class="{ active: currentPath === '/users' && currentTab === 'warehouses' }"
+              @click="navigateMenu('/users', 'warehouses')"
+            >
+              <span class="sub-dot" />
+              <span>多级库藏分仓授权</span>
             </div>
           </div>
         </div>
@@ -676,7 +780,7 @@ import { ref, computed, watch, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { useUserStore, PRESET_USERS, type UserProfile } from '@/stores/userStore';
-import { httpGet } from '@/api/request';
+import { httpGet, httpPost } from '@/api/request';
 import SvgIcon from '@/components/common/SvgIcon.vue';
 import RbacMatrixDrawer from '@/components/RbacMatrixDrawer.vue';
 import PrintVoucherDialog from '@/components/PrintVoucherDialog.vue';
@@ -716,6 +820,7 @@ const expandedGroups = ref<Record<string, boolean>>({
   logs: false,
   hospitalProc: false,
   supplierPortal: false,
+  ragHub: false,
   users: false
 });
 
@@ -754,19 +859,71 @@ function handleMouseLeave() {
 }
 
 /**
+ * 校验当前人员对指定路由模块的访问权限
+ * @param {string} path 目标路由相对路径
+ * @returns {{ allowed: boolean; moduleName: string }} 校验结果与模块名称
+ */
+function checkRoutePermission(path: string): { allowed: boolean; moduleName: string } {
+  if (userStore.currentUser.roleCode === 'sys_admin') {
+    return { allowed: true, moduleName: '全院功能' };
+  }
+  if (path.startsWith('/dict')) {
+    return { allowed: canViewProductDict.value, moduleName: '产品字典管理' };
+  }
+  if (path.startsWith('/general')) {
+    return { allowed: canViewGeneralMaterial.value, moduleName: '普通耗材主库' };
+  }
+  if (path.startsWith('/high-value')) {
+    return { allowed: canViewHighValue.value, moduleName: '高值耗材专仓' };
+  }
+  if (path.startsWith('/secondary')) {
+    return { allowed: canViewSecondaryWarehouse.value, moduleName: '临床二级库房' };
+  }
+  if (path.startsWith('/finance')) {
+    return { allowed: canViewFinancePrint.value, moduleName: '财务精算与对账' };
+  }
+  if (path.startsWith('/logs')) {
+    return { allowed: canViewWorkflowLog.value, moduleName: '物资流转追溯' };
+  }
+  if (path.startsWith('/procurement')) {
+    return { allowed: canViewHospitalProcurement.value, moduleName: '采购管理与准入' };
+  }
+  if (path.startsWith('/supplier-portal')) {
+    return { allowed: canViewSupplierPortal.value, moduleName: '外部供应商协同' };
+  }
+  if (path.startsWith('/rag-hub')) {
+    return { allowed: canViewRagHub.value, moduleName: '智能体与知识工程' };
+  }
+  if (path.startsWith('/users')) {
+    return { allowed: canViewUsers.value, moduleName: '系统与人员管理' };
+  }
+  return { allowed: true, moduleName: '业务视图' };
+}
+
+/**
  * 切换一级菜单树折叠与跳转
  */
 function toggleGroup(groupKey: string, defaultPath: string) {
   expandedGroups.value[groupKey] = !expandedGroups.value[groupKey];
+  const perm = checkRoutePermission(defaultPath);
+  if (!perm.allowed) {
+    ElMessage.warning(`无权访问：当前人员 [${userStore.currentUser.realName}] 尚未开通 [${perm.moduleName}] 权限，如需使用请联系管理员在人员权限矩阵中开启`);
+    return;
+  }
   if (currentPath.value !== defaultPath) {
     router.push(defaultPath);
   }
 }
 
 /**
- * 点击二级子菜单导航
+ * 点击二级子菜单导航，拦截无权限点击并即时提示
  */
 function navigateMenu(path: string, tab?: string) {
+  const perm = checkRoutePermission(path);
+  if (!perm.allowed) {
+    ElMessage.warning(`无权访问：当前人员 [${userStore.currentUser.realName}] 尚未开通 [${perm.moduleName}] 权限，如需使用请联系管理员在人员权限矩阵中开启`);
+    return;
+  }
   if (tab) {
     router.push({ path, query: { tab } });
   } else {
@@ -799,7 +956,8 @@ const canViewHighValue = computed(() => (
 const canViewSecondaryWarehouse = computed(() => userStore.canAction('SEC_WAREHOUSE', 'can_view'));
 const canViewWorkflowLog = computed(() => userStore.canAction('WORKFLOW_LOG', 'can_view'));
 const canViewFinancePrint = computed(() => userStore.canAction('FINANCE_AUDIT', 'can_view'));
-const canViewHospitalProcurement = computed(() => userStore.currentUser.roleCode !== 'supplier_user');
+const canViewHospitalProcurement = computed(() => userStore.canAction('PURCHASE_PLAN', 'can_view') || userStore.currentUser.roleCode !== 'supplier_user');
+const canViewRagHub = computed(() => userStore.canAction('AGENT_HUB', 'can_view') || userStore.currentUser.roleCode !== 'supplier_user');
 const canViewSupplierPortal = computed(() => (
   userStore.currentUser.roleCode === 'supplier_user' || userStore.currentUser.roleCode === 'sys_admin'
 ));
@@ -815,6 +973,7 @@ watch(
 onMounted(() => {
   document.documentElement.setAttribute('data-theme', userStore.theme);
   userStore.fetchPermissions();
+  userStore.refreshAuthorizedWarehouses();
 });
 
 const userRoleLabel = computed(() => {
@@ -862,7 +1021,7 @@ async function openSwitchUserModal() {
   switchUserModalVisible.value = true;
   loadingSwitchUsers.value = true;
   try {
-    const res = await httpGet<any>('/users');
+    const res = await httpGet<any>('/auth/switchable-users');
     if (Array.isArray(res)) {
       allDbUsers.value = res;
     } else if (res && res.data) {
@@ -873,15 +1032,20 @@ async function openSwitchUserModal() {
       allDbUsers.value = [];
     }
   } catch (err) {
-    console.warn('获取全院人员列表失败，使用本地预设人员', err);
-    allDbUsers.value = PRESET_USERS.map((u) => ({
-      id: u.id,
-      username: u.username,
-      real_name: u.realName,
-      role_code: u.roleCode,
-      dept_name: u.deptName,
-      dept_code: u.deptCode
-    }));
+    console.warn('获取全院可切换人员列表失败，尝试备用接口', err);
+    try {
+      const fallbackRes = await httpGet<any>('/users');
+      allDbUsers.value = Array.isArray(fallbackRes) ? fallbackRes : (fallbackRes?.data || []);
+    } catch {
+      allDbUsers.value = PRESET_USERS.map((u) => ({
+        id: u.id,
+        username: u.username,
+        real_name: u.realName,
+        role_code: u.roleCode,
+        dept_name: u.deptName,
+        dept_code: u.deptCode
+      }));
+    }
   } finally {
     loadingSwitchUsers.value = false;
   }
@@ -901,10 +1065,21 @@ async function handleDoSwitchUser(target: any) {
     deptName: target.dept_name || '信息科'
   };
 
+  try {
+    const res = await httpPost<any>('/auth/switch-token', { user_id: target.id, username: target.username });
+    if (res && res.access_token) {
+      userStore.token = res.access_token;
+    } else {
+      userStore.token = `spd_token_${mappedUser.username}_${Date.now()}`;
+    }
+  } catch {
+    userStore.token = `spd_token_${mappedUser.username}_${Date.now()}`;
+  }
+
   userStore.currentUser = mappedUser;
-  userStore.token = `spd_token_${mappedUser.username}_${Date.now()}`;
   userStore.syncStorage(true, mappedUser, userStore.token);
   await userStore.fetchPermissions();
+  await userStore.refreshAuthorizedWarehouses();
 
   ElMessage.success(`已成功切换工作台人员会话：${mappedUser.realName} (${mappedUser.deptName})`);
   switchUserModalVisible.value = false;

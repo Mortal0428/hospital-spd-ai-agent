@@ -163,29 +163,47 @@ const voucherTitle = computed(() => {
  * @throws 无异常
  */
 function digitUppercase(money: number): string {
-  if (isNaN(money) || money < 0) return '零元整';
-  const fraction = ['角', '分'];
+  if (isNaN(money) || money === null || money === undefined) return '零元整';
   const digit = ['零', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖'];
   const unit = [
     ['元', '万', '亿'],
     ['', '拾', '佰', '仟']
   ];
-  let num = Math.abs(money);
+
+  const totalFen = Math.round(Math.abs(money) * 100);
+  if (totalFen === 0) return '零元整';
+
+  const fen = totalFen % 10;
+  const jiao = Math.floor(totalFen / 10) % 10;
+  let yuan = Math.floor(totalFen / 100);
+
   let s = '';
-  for (let i = 0; i < fraction.length; i++) {
-    s += (digit[Math.floor(num * 10 * Math.pow(10, i)) % 10] + fraction[i]).replace(/零./, '');
-  }
-  s = s || '整';
-  num = Math.floor(num);
-  for (let i = 0; i < unit[0].length && num > 0; i++) {
-    let p = '';
-    for (let j = 0; j < unit[1].length && num > 0; j++) {
-      p = digit[num % 10] + unit[1][j] + p;
-      num = Math.floor(num / 10);
+  if (yuan > 0) {
+    let num = yuan;
+    for (let i = 0; i < unit[0].length && num > 0; i++) {
+      let p = '';
+      for (let j = 0; j < unit[1].length && num > 0; j++) {
+        p = digit[num % 10] + unit[1][j] + p;
+        num = Math.floor(num / 10);
+      }
+      s = p.replace(/(零.)*零$/, '').replace(/^$/, '零') + unit[0][i] + s;
     }
-    s = p.replace(/(零.)*零$/, '').replace(/^$/, '零') + unit[0][i] + s;
+    s = s.replace(/(零.)*零元/, '元').replace(/(零.)+/g, '零');
   }
-  return '人民币' + (s.replace(/(零.)*零元/, '元').replace(/(零.)+/g, '零').replace(/^整$/, '零元整') || '零元整');
+
+  // 显式精确处理角分，当 jiao === 0 && fen > 0 且 yuan > 0 时精确拼接 '零'
+  let fractionStr = '';
+  if (jiao === 0 && fen === 0) {
+    fractionStr = '整';
+  } else if (jiao > 0 && fen === 0) {
+    fractionStr = digit[jiao] + '角';
+  } else if (jiao === 0 && fen > 0) {
+    fractionStr = (yuan > 0 ? '零' : '') + digit[fen] + '分';
+  } else {
+    fractionStr = digit[jiao] + '角' + digit[fen] + '分';
+  }
+
+  return s + fractionStr;
 }
 
 /**

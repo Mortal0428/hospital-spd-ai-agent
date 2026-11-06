@@ -90,3 +90,87 @@ export function verifyHighValueQrScan(data: {
 export function listVerifiedHighValueItems(): Promise<HighValueLifecycleOrder[]> {
   return httpGet('/ext/high-value/verified-list');
 }
+
+/**
+ * 不良事件紧急召回批次汇总契约
+ */
+export interface RecallBatchSummary {
+  batch_no: string;
+  product_name: string;
+  product_code: string;
+  spec_model: string;
+  unit_price: number;
+  expiry_date: string;
+  total_items_in_batch: number;
+  in_stock_frozen_count: number;
+  implanted_patients_count: number;
+}
+
+/**
+ * 不良事件已植入患者紧急追查清册项契约
+ */
+export interface RecallPatientItem {
+  udi_sn: string;
+  batch_no: string;
+  product_code: string;
+  product_name: string;
+  spec_model: string;
+  patient_inpatient_no: string;
+  patient_name_masked: string;
+  surgery_name: string;
+  attending_doctor: string;
+  verify_nurse_name: string;
+  verified_at: string;
+  current_dept_name: string;
+  follow_up_status: 'PENDING_CONTACT' | 'CONTACTED_NORMAL' | 'ADVERSE_OBSERVED' | 'COMPENSATED';
+  follow_up_doctor: string;
+  follow_up_remark: string;
+  updated_at: string;
+}
+
+/**
+ * 不良事件穿透返回结构
+ */
+export interface RecallTraceResult {
+  batch_list?: Array<{
+    batch_no: string;
+    product_name: string;
+    product_code: string;
+    spec_model: string;
+    total_items: number;
+    implanted_count: number;
+    in_stock_count: number;
+  }>;
+  batch_summary: RecallBatchSummary | null;
+  patient_list: RecallPatientItem[];
+}
+
+/**
+ * 穿透查询不良事件召回批次对应的在库锁定件数与已植入患者紧急追访清册
+ * @param batch_no 可选生产批号，为空时返回全院批次追查汇总
+ * @returns Promise<RecallTraceResult> 穿透追查清册
+ * @route GET /api/v1/extended-spd/recall/trace-patients
+ * @throws Error 当请求异常时抛出
+ */
+export function traceRecallPatients(batch_no?: string): Promise<RecallTraceResult> {
+  return httpGet('/ext/recall/trace-patients', batch_no ? { batch_no } : undefined);
+}
+
+/**
+ * 更新不良事件已植入患者的医学随访状态与处置记录（触发 6W 审计日志）
+ * @param data 随访状态流转载荷
+ * @returns Promise<any> 更新回执
+ * @route POST /api/v1/ext/recall/update-follow-up
+ * @throws Error 异常抛出
+ */
+export function updateRecallFollowUp(data: {
+  udi_sn: string;
+  batch_no?: string;
+  follow_up_status: string;
+  follow_up_doctor?: string;
+  follow_up_remark?: string;
+  operator_name?: string;
+}): Promise<any> {
+  return httpPost('/ext/recall/update-follow-up', data);
+}
+

@@ -1284,6 +1284,19 @@
       voucher-type="医疗物资出入库四联签字确认单"
       :order-data="selectedPrintOrder"
     />
+
+    <!-- 智能体 2: 主库物资按需分发与补货调拨智能体 (Router + Skill 架构) -->
+    <AgentChatWidget
+      floating
+      agent-id="stock_dispatch"
+      agent-title="主库物资按需分发智能体"
+      architecture-tag="Router + Skill (路由技能专精)"
+      :preset-questions="[
+        '扫描骨科病区耗材水位并生成补货建议',
+        '查询主库近效期物资FEFO先出批次',
+        '生成主库向心血管内科调拨单'
+      ]"
+    />
   </div>
 </template>
 
@@ -1291,6 +1304,7 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox, ElNotification } from 'element-plus';
+import AgentChatWidget from '@/components/AgentChatWidget.vue';
 import { useFormDraft } from '@/composables/useFormDraft';
 import { useBarcodeScanner } from '@/composables/useBarcodeScanner';
 import {

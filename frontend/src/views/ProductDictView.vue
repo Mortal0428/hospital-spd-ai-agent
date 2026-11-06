@@ -1716,6 +1716,19 @@
         </table>
       </div>
     </el-dialog>
+
+    <!-- 智能体 1: 产品字典智能归类与建库审查智能体 (Plan & Execute 架构) -->
+    <AgentChatWidget
+      floating
+      agent-id="dict_guard"
+      agent-title="产品字典智能归类与建库智能体"
+      architecture-tag="Plan & Execute (3步法)"
+      :preset-questions="[
+        '帮我检查医用外科口罩分类是否合规',
+        '以科室主管权限新建一类骨科高值耗材',
+        '自动分析待入库高值批次合规性'
+      ]"
+    />
   </div>
 </template>
 
@@ -1725,6 +1738,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { useUserStore } from '@/stores/userStore';
 import SvgIcon from '@/components/common/SvgIcon.vue';
+import AgentChatWidget from '@/components/AgentChatWidget.vue';
 import {
   listSpns,
   createSpn,
@@ -3575,13 +3589,24 @@ onMounted(() => {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 12px;
+  margin-bottom: 16px;
 }
 
 .wh-kpi-item {
   display: flex;
   flex-direction: column;
-  padding: 14px 18px;
+  padding: 16px 20px;
   border-radius: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-divider);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.wh-kpi-item:hover {
+  border-color: var(--accent-primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .wh-kpi-item .kpi-label {
@@ -3614,6 +3639,9 @@ onMounted(() => {
   flex-direction: column;
   padding: 18px;
   border-radius: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-divider);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .wh-group-header {

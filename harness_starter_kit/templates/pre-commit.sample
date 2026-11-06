@@ -1,0 +1,28 @@
+#!/usr/bin/env sh
+# ========================================================
+# Git Pre-commit 质量护栏自动拦截门禁 Hook
+# 存放位置: .git/hooks/pre-commit (需赋予可执行权限 chmod +x)
+# ========================================================
+
+echo "[Harness-PreCommit] 正在执行提交前代码合规静态扫描..."
+
+# 运行 Harness 静态规则检查
+node -e "
+const { runAllGuardrails } = require('./harness_starter_kit/core/guardrails');
+const res = runAllGuardrails();
+if (!res.passed) {
+  console.error('[Harness-PreCommit-Error] 代码合规校验未通过，已拒绝提交:');
+  res.violations.forEach(v => console.error('  - ' + v));
+  process.exit(1);
+} else {
+  console.log('[Harness-PreCommit-Passed] 零 Emoji 与零密钥泄露检测通过，允许提交。');
+}
+"
+
+# 检查执行结果
+if [ $? -ne 0 ]; then
+  echo "[Harness-PreCommit] 请修复上述违规项后再重新提交。"
+  exit 1
+fi
+
+exit 0

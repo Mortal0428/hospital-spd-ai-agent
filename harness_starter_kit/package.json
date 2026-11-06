@@ -1,0 +1,23 @@
+{
+  "name": "harness-starter-kit",
+  "version": "1.0.0",
+  "description": "Production-grade AI agent development guardrails, spec enforcement and Playwright E2E verification kit",
+  "main": "core/runner.js",
+  "scripts": {
+    "test": "node core/runner.js",
+    "guardrails": "node -e \"const { runAllGuardrails } = require('./core/guardrails'); const res = runAllGuardrails(); if (!res.passed) { console.error('[Guardrails-Failed]', res.violations); process.exit(1); } else { console.log('[Guardrails-Passed] All checks cleared.'); }\""
+  },
+  "keywords": [
+    "ai-agent",
+    "guardrails",
+    "playwright",
+    "e2e",
+    "riper-5",
+    "quality-assurance"
+  ],
+  "author": "Antigravity Engineering",
+  "license": "MIT",
+  "devDependencies": {
+    "playwright": "^1.48.0"
+  }
+}

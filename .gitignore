@@ -49,6 +49,9 @@ backend/chroma_storage/
 
 # Multi-Agent Runtime & Scratch
 .agents/
+.automation_profile/
+*/.automation_profile/
+.agents/
 
 # OS & IDE
 .DS_Store

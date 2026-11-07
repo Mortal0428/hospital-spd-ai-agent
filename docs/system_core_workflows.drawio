@@ -1,0 +1,523 @@
+<mxfile host="Electron" modified="2026-11-07T03:30:00.000Z" agent="Antigravity" version="21.0.0" type="device">
+  <diagram id="diag_agent" name="模块一：智能体框架与飞书Coze双向联调流程">
+    <mxGraphModel dx="1600" dy="1100" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="1120" math="0" shadow="0">
+      <root>
+
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- 顶部开始 -->
+        <mxCell id="t1_start" value="开始" style="ellipse;whiteSpace=wrap;html=1;fillColor=#10b981;strokeColor=#059669;fontColor=#ffffff;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="780" y="30" width="100" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- 前端入口 -->
+        <mxCell id="t1_f_comp" value="SmartAgentHubView.vue&#xa;生命周期: onMounted()&#xa;权限加载: fetchUserRole() (识别 admin / nurse / manager)" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#ecfdf5;strokeColor=#10b981;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="690" y="100" width="280" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="t1_e_start" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#10b981;" edge="1" parent="1" source="t1_start" target="t1_f_comp">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 外部协同端入口 (飞书) -->
+        <mxCell id="t1_feishu_in" value="外部飞书企业群聊 / 终端用户&#xa;发送 @智能体 消息 (event: im.message.receive_v1)" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#eef2ff;strokeColor=#6366f1;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="120" y="100" width="300" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="t1_feishu_ws" value="feishu_ws_service.py&#xa;函数: start_feishu_ws_client()&#xa;飞书官方 WebSocket SDK 双向免穿透长连接" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e0e7ff;strokeColor=#4f46e5;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="130" y="200" width="280" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="t1_e_fws" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#6366f1;" edge="1" parent="1" source="t1_feishu_in" target="t1_feishu_ws">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 后端统一入口 -->
+        <mxCell id="t1_b_router" value="agent_hub_router.py&#xa;路由: POST /api/v1/agent-hub/stream&#xa;入口函数: rag_agent_stream(query, session_id, role, agent_type)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="670" y="200" width="320" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="t1_e_web_to_b" value="query / prompt" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#10b981;" edge="1" parent="1" source="t1_f_comp" target="t1_b_router">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t1_e_feishu_to_b" value="异步事件调度" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#4f46e5;" edge="1" parent="1" source="t1_feishu_ws" target="t1_b_router">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 分支判断：分流模式 -->
+        <mxCell id="t1_branch_mode" value="根据角色与参数判断&#xa;分流模式 (agent_type)" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fef9c3;strokeColor=#ca8a04;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="720" y="290" width="220" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="t1_e_b_to_mode" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#3b82f6;" edge="1" parent="1" source="t1_b_router" target="t1_branch_mode">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 分支 1：special (云端 Coze / 飞书专线流) -->
+        <mxCell id="t1_special_box" value="coze_service.py / special_agent.py&#xa;函数: stream_coze_response(bot_id, query)&#xa;通过 Coze V3 OpenAPI 专线流式响应" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f3ff;strokeColor=#8b5cf6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1150" y="380" width="280" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="t1_e_mode_special" value="special (Coze/飞书流)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#8b5cf6;" edge="1" parent="1" source="t1_branch_mode" target="t1_special_box">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxGeometry x="1290" y="325" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- 分支 2：general (通用大模型直连对话) -->
+        <mxCell id="t1_general_box" value="mimo_service.py / ollama_service.py&#xa;函数: chat_completion_stream(messages, stream=True)&#xa;直调 Ollama(Qwen) / 小米 MiMo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="700" y="380" width="260" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="t1_e_mode_general" value="general (基础问答)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#3b82f6;" edge="1" parent="1" source="t1_branch_mode" target="t1_general_box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t1_judge_kb" value="是否命中知识库？&#xa;(similarity &gt; threshold)" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fef9c3;strokeColor=#ca8a04;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="735" y="470" width="190" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="t1_e_gen_to_kb" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#3b82f6;" edge="1" parent="1" source="t1_general_box" target="t1_judge_kb">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 分支 3：agent (五大业务 LangGraph 智能体状态机) -->
+        <mxCell id="t1_judge_tool" value="是否需要外部工具调用&#xa;(Tool Calling)？" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fef9c3;strokeColor=#ca8a04;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="270" y="380" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="t1_e_mode_agent" value="agent (专业医疗业务智能体)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#10b981;" edge="1" parent="1" source="t1_branch_mode" target="t1_judge_tool">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxGeometry x="380" y="325" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- MCP 工具调用 -->
+        <mxCell id="t1_mcp_box" value="mcp_client.py&#xa;函数: call_mcp_tool(server_name, tool_name, args)&#xa;• mcp_query_stock()&#xa;• mcp_check_supplier_cert()&#xa;• mcp_create_dispatch_order()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ede9fe;strokeColor=#7c3aed;fontSize=12;align=left;spacingLeft=15;" vertex="1" parent="1">
+          <mxGeometry x="80" y="470" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="t1_e_need_tool" value="是 (tool)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#7c3aed;" edge="1" parent="1" source="t1_judge_tool" target="t1_mcp_box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Chroma 知识库检索 -->
+        <mxCell id="t1_rag_box" value="chroma_indexer.py / rag_service.py&#xa;函数: hybrid_search(query, collection_name)&#xa;检索医疗器械分类目录、验收规范与法律法规" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ede9fe;strokeColor=#7c3aed;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="580" y="560" width="280" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="t1_e_kb_yes" value="是 (命中RAG)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#7c3aed;" edge="1" parent="1" source="t1_judge_kb" target="t1_rag_box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- LangGraph 状态机执行 -->
+        <mxCell id="t1_graph_stream" value="runner.py / agent_graph.py&#xa;函数: runner.get_graph_stream()&#xa;ChatPromptTemplate.from_messages()&#xa;调用 StateGraph.stream() 编排状态迭代" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#2563eb;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="240" y="590" width="280" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="t1_e_mcp_to_graph" value="工具结果注入" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#7c3aed;" edge="1" parent="1" source="t1_mcp_box" target="t1_graph_stream">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t1_e_notool_to_graph" value="否 (直接推理)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#2563eb;" edge="1" parent="1" source="t1_judge_tool" target="t1_graph_stream">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxGeometry x="440" y="520" />
+              <mxGeometry x="440" y="590" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- 汇总至 FastAPI SSE 流式输出 -->
+        <mxCell id="t1_sse_hub" value="FastAPI StreamingResponse(SSE)&#xa;函数: yield f&quot;data: {json.dumps(chunk)}
+
+&quot;&#xa;分片流式输出: 思维链 (thinking) + 实体 (tokens) + 节点状态" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d1fae5;strokeColor=#059669;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="630" y="710" width="400" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="t1_e_graph_to_sse" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#2563eb;" edge="1" parent="1" source="t1_graph_stream" target="t1_sse_hub">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxGeometry x="380" y="740" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t1_e_rag_to_sse" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#7c3aed;" edge="1" parent="1" source="t1_rag_box" target="t1_sse_hub">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t1_e_kb_no_to_sse" value="否 (直接输出)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#3b82f6;" edge="1" parent="1" source="t1_judge_kb" target="t1_sse_hub">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxGeometry x="930" y="500" />
+              <mxGeometry x="930" y="710" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t1_e_spec_to_sse" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#8b5cf6;" edge="1" parent="1" source="t1_special_box" target="t1_sse_hub">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxGeometry x="1290" y="740" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- 前端/飞书客户端接收与解析 -->
+        <mxCell id="t1_fe_parse" value="客户端 SSE 流式解析器&#xa;前端: fetchEventSource / reader.read()&#xa;飞书端: card.update_stream(token)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecfdf5;strokeColor=#10b981;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="680" y="810" width="300" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="t1_e_sse_to_parse" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#059669;" edge="1" parent="1" source="t1_sse_hub" target="t1_fe_parse">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 前端渲染输出 -->
+        <mxCell id="t1_render_box" value="前端交互与结果展现&#xa;1. 实时 Markdown 打字机渲染&#xa;2. 动态思维链折叠面板 (Thinking...)&#xa;3. LangGraph 节点流转拓扑实时高亮" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#d1fae5;strokeColor=#059669;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="670" y="900" width="320" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="t1_e_parse_to_render" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#059669;" edge="1" parent="1" source="t1_fe_parse" target="t1_render_box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 人工专家纠偏回路 (Human-in-the-loop) 闭环 -->
+        <mxCell id="t1_human_box" value="专家人类介入 (Human-in-the-loop)&#xa;组件: submitHumanCorrection()&#xa;POST /api/v1/agent-hub/feedback&#xa;记录纠偏日志，沉淀高质量微调知识库" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#d97706;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="900" width="280" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="t1_e_render_to_human" value="专家纠偏" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#d97706;dashed=1;" edge="1" parent="1" source="t1_render_box" target="t1_human_box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t1_e_human_to_chroma" value="回写知识库" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#d97706;dashed=1;" edge="1" parent="1" source="t1_human_box" target="t1_rag_box">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxGeometry x="1240" y="600" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- 结束 -->
+        <mxCell id="t1_end" value="结束" style="ellipse;whiteSpace=wrap;html=1;fillColor=#64748b;strokeColor=#475569;fontColor=#ffffff;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="780" y="1010" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="t1_e_render_to_end" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#64748b;" edge="1" parent="1" source="t1_render_box" target="t1_end">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+    
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="diag_udi" name="模块二：高值耗材UDI溯源与召回追访流程">
+    <mxGraphModel dx="1400" dy="1100" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1300" pageHeight="1120" math="0" shadow="0">
+      <root>
+
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- 顶部开始 -->
+        <mxCell id="t2_start" value="开始" style="ellipse;whiteSpace=wrap;html=1;fillColor=#10b981;strokeColor=#059669;fontColor=#ffffff;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="610" y="30" width="100" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- 前端触发组件 -->
+        <mxCell id="t2_f_comp" value="HighValueView.vue (Tab 8: 不良事件与召回追访)&#xa;事件函数: handleTraceRecall()&#xa;输入待追溯 UDI 唯一码 或 物资生产批号 (batch_no)" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#ecfdf5;strokeColor=#10b981;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="460" y="100" width="400" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="t2_e_start" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#10b981;" edge="1" parent="1" source="t2_start" target="t2_f_comp">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 后端接口与函数 -->
+        <mxCell id="t2_b_api" value="high_value_router.py&#xa;路由: GET /api/v1/ext/recall/trace-patients&#xa;函数: trace_recall_patients(udi: str, batch_no: str, db: Session)&#xa;入参: udi 或 batch_no" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="460" y="200" width="400" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="t2_e_f_to_b" value="HTTP GET" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#10b981;" edge="1" parent="1" source="t2_f_comp" target="t2_b_api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 关联 ORM 穿透查询 -->
+        <mxCell id="t2_orm_query" value="关联 6W 流转日志与患者全生命周期数据&#xa;1. 查 Log6WTraceORM: 穿透操作人、时间、科室、出入库动作&#xa;2. 查 HighValueItemORM / MaterialStockORM: 锁定院内当前库房与在库状态&#xa;3. 查 PatientConsumeORM: 提取已植入该批次的关联患者记录" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ede9fe;strokeColor=#7c3aed;fontSize=12;align=left;spacingLeft=15;" vertex="1" parent="1">
+          <mxGeometry x="420" y="310" width="480" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="t2_e_api_to_orm" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#3b82f6;" edge="1" parent="1" source="t2_b_api" target="t2_orm_query">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 菱形分支：是否查到匹配记录 -->
+        <mxCell id="t2_judge_found" value="是否查到关联的&#xa;流转记录与患者？" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fef9c3;strokeColor=#ca8a04;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="540" y="430" width="240" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="t2_e_orm_to_judge" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#7c3aed;" edge="1" parent="1" source="t2_orm_query" target="t2_judge_found">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 未找到分支：友好提示并返回闭环 -->
+        <mxCell id="t2_not_found" value="返回空数组并提示：&#xa;ElMessage.warning('未检索到该 UDI 或批号的院内流转记录')&#xa;引导用户核对批号后重新输入" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#ef4444;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="140" y="435" width="280" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="t2_e_judge_no" value="否 (查无数据)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#ef4444;" edge="1" parent="1" source="t2_judge_found" target="t2_not_found">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- 未找到回路回到前端输入 -->
+        <mxCell id="t2_e_retry_input" value="重新核对输入" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#ef4444;dashed=1;" edge="1" parent="1" source="t2_not_found" target="t2_f_comp">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxGeometry x="280" y="130" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- 命中分支：患者脱敏与列表生成 -->
+        <mxCell id="t2_desensitize" value="脱敏过滤患者个人隐私数据 (23项安全合规字段)&#xa;函数: mask_patient_privacy(patient)&#xa;• 姓名加星: patient_name_masked（如“张*丰”）&#xa;• 手机加星: phone_masked（如“138****9988”）&#xa;• 身份证加星: id_card_masked（“330106********1234”）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e0f2fe;strokeColor=#0284c7;fontSize=12;align=left;spacingLeft=15;" vertex="1" parent="1">
+          <mxGeometry x="460" y="540" width="400" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="t2_e_judge_yes" value="是 (命中流转)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#10b981;" edge="1" parent="1" source="t2_judge_found" target="t2_desensitize">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 前端渲染追溯详情面板 -->
+        <mxCell id="t2_render_ledger" value="前端展示召回追访台账与操作面板&#xa;1. 还原【主库入库 -&gt; 按需分发 -&gt; 二级库接收 -&gt; 患者核销】完整人物流转链&#xa;2. 激活【一键冻结在库物资】与【更新患者追访状态】操作按钮" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#d1fae5;strokeColor=#059669;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="440" y="670" width="440" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="t2_e_des_to_render" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#0284c7;" edge="1" parent="1" source="t2_desensitize" target="t2_render_ledger">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 两路并发闭环处置 -->
+        <!-- 分支 A：院内库存冻结 -->
+        <mxCell id="t2_freeze_box" value="【院内控制】一键锁定未消耗库存&#xa;函数: freeze_batch_stock()&#xa;接口: POST /api/v1/high-value/freeze-batch&#xa;将所有库房对应批次标记为 status='frozen'&#xa;落库 Log6WTraceORM 记录紧急召回操作" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff7ed;strokeColor=#f97316;fontSize=12;align=left;spacingLeft=15;" vertex="1" parent="1">
+          <mxGeometry x="220" y="770" width="340" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="t2_e_to_freeze" value="路径 A: 院内库存冻结" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#f97316;" edge="1" parent="1" source="t2_render_ledger" target="t2_freeze_box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 分支 B：临床患者追访 -->
+        <mxCell id="t2_followup_box" value="【临床随访】更新患者随访与复查状态&#xa;函数: update_followup_status()&#xa;接口: POST /api/v1/ext/recall/followup-status&#xa;将追访状态流转为“已电话告知”或“已回院复查”&#xa;完善处置闭环记录" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0fdf4;strokeColor=#16a34a;fontSize=12;align=left;spacingLeft=15;" vertex="1" parent="1">
+          <mxGeometry x="760" y="770" width="340" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="t2_e_to_followup" value="路径 B: 临床患者追访" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#16a34a;" edge="1" parent="1" source="t2_render_ledger" target="t2_followup_box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 凭单打印归档 -->
+        <mxCell id="t2_print_box" value="【凭证归档】调用 PrintVoucherDialog.vue 打印引擎&#xa;函数: openPrintDialog(voucher_type='recall_report')&#xa;输出符合国家药监局规范的《医疗器械不良事件召回患者追访报告四联单》&#xa;（红/黄/蓝/白 四联物理签字留存，完成法律法规闭环）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f3ff;strokeColor=#8b5cf6;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="450" y="910" width="420" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="t2_e_freeze_to_print" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#f97316;" edge="1" parent="1" source="t2_freeze_box" target="t2_print_box">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxGeometry x="390" y="880" />
+              <mxGeometry x="580" y="880" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t2_e_follow_to_print" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#16a34a;" edge="1" parent="1" source="t2_followup_box" target="t2_print_box">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxGeometry x="930" y="880" />
+              <mxGeometry x="740" y="880" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- 结束 -->
+        <mxCell id="t2_end" value="结束" style="ellipse;whiteSpace=wrap;html=1;fillColor=#64748b;strokeColor=#475569;fontColor=#ffffff;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="610" y="1030" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="t2_e_print_to_end" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#64748b;" edge="1" parent="1" source="t2_print_box" target="t2_end">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+    
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="diag_procurement" name="模块三：采购计划-审批-供应商协同-入库流程">
+    <mxGraphModel dx="1800" dy="1500" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1580" math="0" shadow="0">
+      <root>
+
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- 顶部开始 -->
+        <mxCell id="t3_start" value="开始" style="ellipse;whiteSpace=wrap;html=1;fillColor=#10b981;strokeColor=#059669;fontColor=#ffffff;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="850" y="30" width="100" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- 顶部三方提报入口 -->
+        <mxCell id="t3_in_nurse" value="临床科室 (护士/技师)&#xa;提报科室月度/手术耗材采购需求" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#ecfdf5;strokeColor=#10b981;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="400" y="100" width="240" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="t3_in_main" value="HospitalProcurementView.vue&#xa;采购计划编制主工作台&#xa;事件: handleCreatePlan()" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#d1fae5;strokeColor=#059669;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="780" y="100" width="240" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="t3_in_mgr" value="耗材科/设备科管理员&#xa;发起全院主库定期补货计划" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#ecfdf5;strokeColor=#10b981;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1160" y="100" width="240" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="t3_e_start_to_main" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#10b981;" edge="1" parent="1" source="t3_start" target="t3_in_main">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t3_e_nurse_to_main" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#10b981;" edge="1" parent="1" source="t3_in_nurse" target="t3_in_main">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t3_e_mgr_to_main" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#10b981;" edge="1" parent="1" source="t3_in_mgr" target="t3_in_main">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 后端提交创建计划接口 -->
+        <mxCell id="t3_b_create" value="procurement_router.py&#xa;路由: POST /api/v1/procurement/plans&#xa;函数: create_procurement_plan(plan_in: ProcurementPlanCreate, db: Session)&#xa;入参: {dept_id, items: [{catalog_id, qty, reason}], plan_type}&#xa;初始状态: status = 'pending_approval' (待审核)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="690" y="190" width="420" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="t3_e_main_to_create" value="HTTP POST" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#059669;" edge="1" parent="1" source="t3_in_main" target="t3_b_create">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 审核接口 -->
+        <mxCell id="t3_b_audit" value="procurement_router.py&#xa;路由: POST /api/v1/procurement/plans/{id}/audit&#xa;函数: audit_procurement_plan(id, audit_in: AuditActionSchema, db: Session)&#xa;科室主任 / 设备科耗材科多级审批" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#3b82f6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="690" y="310" width="420" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="t3_e_create_to_audit" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#3b82f6;" edge="1" parent="1" source="t3_b_create" target="t3_b_audit">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 菱形分支：审批是否通过 -->
+        <mxCell id="t3_judge_audit" value="审批是否通过？&#xa;(action == 'approve')" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fef9c3;strokeColor=#ca8a04;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="780" y="420" width="240" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="t3_e_audit_to_judge" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#3b82f6;" edge="1" parent="1" source="t3_b_audit" target="t3_judge_audit">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 驳回分支与回路 -->
+        <mxCell id="t3_reject_box" value="驳回采购申请&#xa;更新 status = 'rejected'&#xa;记录 audit_opinion 驳回理由&#xa;通知申请人重新修改" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#ef4444;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="360" y="425" width="260" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="t3_e_audit_reject" value="否 (rejected 驳回)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#ef4444;" edge="1" parent="1" source="t3_judge_audit" target="t3_reject_box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- 驳回回路返回重新填报 -->
+        <mxCell id="t3_e_reject_loop" value="打回草稿箱，重新填报" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#ef4444;dashed=1;" edge="1" parent="1" source="t3_reject_box" target="t3_in_main">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxGeometry x="490" y="160" />
+              <mxGeometry x="840" y="160" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- 审批通过 -> 生成采购订单 -->
+        <mxCell id="t3_gen_po" value="生成正式采购订单 (PurchaseOrderORM)&#xa;函数: generate_purchase_order(plan)&#xa;订单状态: status = 'pending_supplier' (待供应商接单)&#xa;通知对应中标供应商门户" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#2563eb;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="740" y="530" width="320" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="t3_e_audit_pass" value="是 (approved 通过)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#2563eb;" edge="1" parent="1" source="t3_judge_audit" target="t3_gen_po">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 外部供应商协同门户入口 -->
+        <mxCell id="t3_sup_login" value="ExternalSupplierPortalView.vue&#xa;供应商登录协同门户&#xa;函数: check_supplier_qualification(supplier_id)" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#fef3c7;strokeColor=#d97706;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="730" y="640" width="340" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="t3_e_po_to_sup" value="订单下发" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#d97706;" edge="1" parent="1" source="t3_gen_po" target="t3_sup_login">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 菱形分支：经营资质门禁审查 -->
+        <mxCell id="t3_judge_qual" value="《医疗器械经营许可证》&#xa;资质是否审核通过？&#xa;(qual_status == 'approved')" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fef9c3;strokeColor=#ca8a04;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="760" y="740" width="280" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="t3_e_sup_to_qual" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#d97706;" edge="1" parent="1" source="t3_sup_login" target="t3_judge_qual">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 资质未通过拦截分支与回路 -->
+        <mxCell id="t3_qual_block" value="弹窗强制拦截 (ElMessageBox.alert)&#xa;提示: “资质证照未通过院方审核，禁止接单发货”&#xa;强制引导进入资质上传页重新提交认证" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#ef4444;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="350" y="745" width="290" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="t3_e_qual_no" value="未上传 / 未审核" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#ef4444;" edge="1" parent="1" source="t3_judge_qual" target="t3_qual_block">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t3_e_qual_loop" value="上传证照待审核" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#ef4444;dashed=1;" edge="1" parent="1" source="t3_qual_block" target="t3_sup_login">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxGeometry x="495" y="670" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- 供应商在线接单与配货发货 -->
+        <mxCell id="t3_sup_ship" value="供应商在线配货与二次确认发货&#xa;函数: supplier_ship_order()&#xa;接口: POST /api/v1/supplier/orders/{id}/ship&#xa;实物信息录入: 批号(batch_no)、有效期(exp_date)、生产日期、数量&#xa;订单状态流转为 status = 'shipped' (已发货)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#d97706;fontSize=12;align=left;spacingLeft=15;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="720" y="850" width="360" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="t3_e_qual_yes" value="资质合规 (解锁订单)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#16a34a;" edge="1" parent="1" source="t3_judge_qual" target="t3_sup_ship">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 自动生成医院待验收入库单 -->
+        <mxCell id="t3_gen_inbound" value="系统触发自动生成《待验收入库单》&#xa;模型: InboundOrderORM (status = 'pending_inspection')&#xa;将发货批号、效期、随货同行单信息自动映射至待验池" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ede9fe;strokeColor=#7c3aed;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="720" y="970" width="360" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="t3_e_ship_to_inbound" value="发货自动触发" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#7c3aed;" edge="1" parent="1" source="t3_sup_ship" target="t3_gen_inbound">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 医院主库现场核验 -->
+        <mxCell id="t3_wh_view" value="MaterialWarehouseView.vue&#xa;耗材科/设备科管理员现场验收&#xa;函数: handleInspectOrder(inbound_id)" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#d1fae5;strokeColor=#059669;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="730" y="1070" width="340" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="t3_e_inbound_to_wh" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#059669;" edge="1" parent="1" source="t3_gen_inbound" target="t3_wh_view">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 菱形分支：实物验收是否合格 -->
+        <mxCell id="t3_judge_inspect" value="实物与证照验收是否合格？&#xa;(is_qualified == True)" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fef9c3;strokeColor=#ca8a04;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="760" y="1160" width="280" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="t3_e_wh_to_inspect" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#059669;" edge="1" parent="1" source="t3_wh_view" target="t3_judge_inspect">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 验收不合格分支与拒收退回回路 -->
+        <mxCell id="t3_inspect_reject" value="拒收并退回配货 (POST /api/v1/warehouse/reject)&#xa;填写拒收原因 (如效期不足/外包装破损)&#xa;落库 Log6WTraceORM 异常流转日志&#xa;通知供应商重新补发" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#ef4444;fontSize=12;align=left;spacingLeft=15;" vertex="1" parent="1">
+          <mxGeometry x="320" y="1160" width="320" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="t3_e_inspect_no" value="不合格 (拒收)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#ef4444;" edge="1" parent="1" source="t3_judge_inspect" target="t3_inspect_reject">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t3_e_reject_to_sup" value="退回供应商重新配货发货" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#ef4444;dashed=1;" edge="1" parent="1" source="t3_inspect_reject" target="t3_sup_ship">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxGeometry x="250" y="1195" />
+              <mxGeometry x="250" y="890" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- 验收合格：确认入库函数 -->
+        <mxCell id="t3_confirm_inbound" value="确认验收入库&#xa;函数: confirm_inbound_stock(inbound_id, db: Session)&#xa;接口: POST /api/v1/warehouse/confirm-inbound" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="740" y="1270" width="320" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="t3_e_inspect_yes" value="合格 (入库确认)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#16a34a;" edge="1" parent="1" source="t3_judge_inspect" target="t3_confirm_inbound">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 底部三表数据库落库 (圆柱体存储节点) -->
+        <mxCell id="t3_db_stock" value="[MaterialStockORM]&#xa;主库库存累加&#xa;stock_qty += qty&#xa;更新单位成本与加权单价" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#ede9fe;strokeColor=#7c3aed;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="460" y="1370" width="220" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="t3_db_batch" value="[BatchTrackingORM]&#xa;写入生产批号跟踪记录&#xa;记录 batch_no, exp_date, mfg_date, 注册证号" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#ede9fe;strokeColor=#7c3aed;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="790" y="1370" width="220" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="t3_db_log6w" value="[Log6WTraceORM]&#xa;写入 6W 审计日志&#xa;Who(库管员), When, Where(主库)&#xa;What, Why(采购入库), How" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#ede9fe;strokeColor=#7c3aed;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1120" y="1370" width="220" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- 入库触发三表并发落库实线 -->
+        <mxCell id="t3_e_to_db1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#7c3aed;" edge="1" parent="1" source="t3_confirm_inbound" target="t3_db_stock">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t3_e_to_db2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#7c3aed;" edge="1" parent="1" source="t3_confirm_inbound" target="t3_db_batch">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t3_e_to_db3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#7c3aed;" edge="1" parent="1" source="t3_confirm_inbound" target="t3_db_log6w">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 结束 -->
+        <mxCell id="t3_end" value="结束" style="ellipse;whiteSpace=wrap;html=1;fillColor=#64748b;strokeColor=#475569;fontColor=#ffffff;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="850" y="1490" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="t3_e_db_to_end" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#64748b;" edge="1" parent="1" source="t3_db_batch" target="t3_end">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+    
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

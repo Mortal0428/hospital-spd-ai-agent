@@ -43,11 +43,13 @@ module.exports = {
 
   // 核心规范文件清单（runner.js 启动时校验完整性）
   specFiles: [
-    { relPath: 'GEMINI.md', role: 'AI 代理核心执行铁律与防错契约' },
-    { relPath: 'AGENTS.md', role: '研发子 Agent 专业化分工契约' },
-    { relPath: 'HARNESS_PITFALLS_AND_LESSONS.md', role: '全栈防踩坑高危反模式与防退化军规' },
-    { relPath: 'core/guardrails.js', role: '合规静态扫描引擎' },
-    { relPath: 'core/browser.js', role: '无锁持久化 Playwright 浏览器驱动' }
+    { relPath: 'GEMINI.md', role: '组件①&④: Gemini AI 代理核心执行铁律与防错契约' },
+    { relPath: 'CLAUDE.md', role: '组件①&④: Claude 跨平台标准指令与架构约束基线' },
+    { relPath: 'AGENTS.md', role: '组件②: 研发子 Agent 专业化分工与协作契约' },
+    { relPath: 'SKILL.md', role: '组件①&⑤: 渐进式通用技能库与反馈循环自进化资产' },
+    { relPath: 'HARNESS_PITFALLS_AND_LESSONS.md', role: '组件⑤: 全栈防踩坑高危反模式与防退化军规' },
+    { relPath: 'core/guardrails.js', role: '组件④: 合规静态扫描引擎' },
+    { relPath: 'core/browser.js', role: '组件④: 无锁持久化 Playwright 浏览器驱动' }
   ],
 
   // 浏览器与 Playwright 配置
